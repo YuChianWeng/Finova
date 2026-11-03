@@ -478,7 +478,7 @@ body{background-image:none}
 .ov-r{display:flex;flex-direction:column;gap:16px;min-width:0}
 @media (min-width:720px){.kpis.two{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-/* account overview */
+/* account daily */
 .acc-hero{text-align:center;padding:8px 0 4px;display:flex;flex-direction:column;align-items:center;gap:8px}
 .hero-num{display:flex;align-items:center;gap:14px}
 .hero-l{font:500 13px/1.25 var(--f-b);color:var(--tx);text-align:left}
@@ -497,6 +497,47 @@ details.grp>summary .sgn::before{content:"+";display:inline-block;width:14px;col
 details.grp[open]>summary .sgn::before{content:"\2212"}
 details.grp>summary .num{margin-left:auto;color:var(--mu);font-size:15px}
 .hide-amt .amt,.hide-amt .big-n{filter:blur(8px)}
+
+/* ===== Compact type scale ===== */
+body{font-size:14px}
+.h2{font-size:14.5px}
+.big{font-size:22px}
+.huge{font-size:30px}
+.kpi{padding:14px;gap:6px}
+.kpi .v{font-size:21px}
+.ttl{font-size:18px}
+.tx-b{min-height:62px;gap:12px;padding-block:8px}
+.tx-t{font-size:14.5px}
+.tx-s{font-size:11.5px}
+.tx-r .amt{font-size:14.5px}
+.pill{font-size:10.5px;padding:0 8px}
+.src{font-size:10px}
+.cat-ic{width:38px;height:38px}
+.cat-ic .ic{width:18px;height:18px}
+.cat-ic.big{width:42px;height:42px}
+.cal-w{font-size:12px}
+.cal-d{height:44px;font-size:15px}
+.cal-d .n{width:38px;height:38px}
+.cal-d .n.mo{font-size:12px}
+.day-sum{padding:12px}
+.day-sum b{font-size:14.5px}
+.day-tot{font-size:14.5px}
+.big-n{font-size:clamp(32px,10vw,52px)}
+.hero-l b{font-size:17px}
+.hero-sub,.hero-links .link{font-size:13px}
+.acc-row{min-height:58px;gap:12px}
+.acc-row .amt{font-size:14.5px}
+details.grp>summary{font-size:14px;min-height:46px}
+details.grp>summary .num{font-size:13.5px}
+.btn{font-size:13.5px}
+.chip{font-size:13px;min-height:38px}
+.in{font-size:14px}
+.mlist a,.mlist button{font-size:14px;min-height:52px}
+.amt-in{font-size:38px}
+.panel-tot .num{font-size:15px}
+.eyebrow{font-size:10.5px}
+.delta{font-size:11px}
+.tbl{font-size:13px}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}
@@ -684,7 +725,7 @@ const REC_HIST=[
 
 /* ================= STATE ================= */
 const S={
-  route:'overview',param:null,
+  route:'accounts',param:null,
   filters:{q:'',types:[],accs:[],cats:[],srcs:[],range:'all',min:'',max:''},
   sort:'date',batch:false,sel:new Set(),
   donut:null,rp:{mode:'month',off:0,cmp:true,ex:false},hid:new Set(),
@@ -737,8 +778,8 @@ function delta(t,acc){
 function applyBal(t,s){ACCS.forEach(a=>{const d=delta(t,a.id);if(d)a.bal+=s*d})}
 
 /* ================= SHELL ================= */
-const NAV=[['overview','總覽','home'],['tx','明細','list'],['accounts','帳戶','wallet'],['reports','報表','chart'],['budget','預算','target'],['reconcile','對帳','scale'],['settings','設定','gear']];
-const TITLES={overview:'總覽',tx:'明細',accounts:'帳戶',acc:'帳戶詳情',reports:'報表',budget:'預算',reconcile:'對帳',settings:'設定',more:'更多'};
+const NAV=[['accounts','帳戶總覽','wallet'],['daily','每日明細','cal'],['tx','全部交易','list'],['reports','報表','chart'],['budget','預算','target'],['reconcile','對帳','scale'],['settings','設定','gear']];
+const TITLES={daily:'每日明細',tx:'全部交易',accounts:'帳戶總覽',acc:'帳戶詳情',reports:'報表',budget:'預算',reconcile:'對帳',settings:'設定',more:'更多'};
 function navActive(r){return r==='acc'?'accounts':r}
 function shell(){
   const act=navActive(S.route);
@@ -747,21 +788,21 @@ function shell(){
   const moreAct=['budget','reconcile','settings','more'].includes(S.route);
   const accAct=['accounts','acc'].includes(S.route);
   $('#tabbar').innerHTML=
-    `<a href="#overview" aria-label="總覽" title="總覽" ${act==='overview'?'aria-current="page"':''}>${ic('home')}</a>`+
-    `<a href="#accounts" aria-label="帳戶" title="帳戶" ${accAct?'aria-current="page"':''}>${ic('wallet')}</a>`+
+    `<a href="#accounts" aria-label="帳戶總覽" title="帳戶總覽" ${accAct?'aria-current="page"':''}>${ic('wallet')}</a>`+
+    `<a href="#daily" aria-label="每日明細" title="每日明細" ${act==='daily'?'aria-current="page"':''}>${ic('cal')}</a>`+
     `<button class="fab" data-a="add" aria-label="記一筆">${ic('plus')}</button>`+
     `<a href="#reports" aria-label="報表" title="報表" ${act==='reports'?'aria-current="page"':''}>${ic('chart')}</a>`+
-    `<a href="#more" aria-label="更多：明細、預算、對帳、設定" title="更多" ${moreAct||act==='tx'?'aria-current="page"':''}>${ic('gear')}</a>`;
+    `<a href="#more" aria-label="更多：全部交易、預算、對帳、設定" title="更多" ${moreAct||act==='tx'?'aria-current="page"':''}>${ic('gear')}</a>`;
   const n=remindItems().length,dark=effTheme()==='dark';
   const themeBtn=`<button class="ibtn round" data-a="theme" aria-label="${dark?'切換為淺色':'切換為深色'}">${ic(dark?'sun':'moon')}</button>`;
-  const bell=`<button class="ibtn round" data-a="go" data-to="overview" data-anchor="remind" aria-label="待處理提醒 ${n} 項">${ic('bell')}${n?`<span class="badge">${n}</span>`:''}</button>`;
+  const bell=`<button class="ibtn round" data-a="go" data-to="daily" data-anchor="remind" aria-label="待處理提醒 ${n} 項">${ic('bell')}${n?`<span class="badge">${n}</span>`:''}</button>`;
   const addD=`<button class="btn p only-d" data-a="add">${ic('plus')}記一筆</button>`;
   let h;
-  if(S.route==='overview'){
+  if(S.route==='daily'){
     const c=S.cal;
     h=`${bell}<div class="grow ctr"><button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic('chev-l','s')}</button><h1 class="ttl num">${c.sel.replace(/-/g,'/')}</h1><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic('chev-r','s')}</button></div><button class="ibtn round" data-a="cal-today" aria-label="回到今天">${ic('cal')}</button><button class="ibtn round" data-a="search" aria-label="搜尋交易">${ic('search')}</button><span class="only-d">${themeBtn}</span>${addD}`;
   }else if(S.route==='accounts'){
-    h=`<button class="ibtn round" data-a="hide" aria-pressed="${S.hide}" aria-label="${S.hide?'顯示金額':'隱藏金額'}">${ic(S.hide?'eye-off':'eye')}</button><div class="grow ctr"><h1 class="ttl">帳戶總覽</h1></div>${themeBtn}<button class="ibtn round" data-a="toast" data-msg="新增帳戶（示範）" aria-label="新增帳戶">${ic('plus')}</button>${addD}`;
+    h=`${bell}<button class="ibtn round" data-a="hide" aria-pressed="${S.hide}" aria-label="${S.hide?'顯示金額':'隱藏金額'}">${ic(S.hide?'eye-off':'eye')}</button><div class="grow ctr"><h1 class="ttl">帳戶總覽</h1></div>${themeBtn}<button class="ibtn round" data-a="toast" data-msg="新增帳戶（示範）" aria-label="新增帳戶">${ic('plus')}</button>${addD}`;
   }else{
     const back=['acc','budget','reconcile','settings','tx'].includes(S.route);
     const title=S.route==='acc'&&A(S.param)?A(S.param).name:TITLES[S.route];
@@ -774,14 +815,14 @@ function setTheme(t){if(t==='system')delete document.documentElement.dataset.the
 try{const t=localStorage.getItem('fin-theme');if(t&&t!=='system')document.documentElement.dataset.theme=t}catch(e){}
 
 function route(){
-  const h=(location.hash||'#overview').slice(1);
+  const h=(location.hash||'#accounts').slice(1);
   if(h.startsWith('acc-')){S.route='acc';S.param=h.slice(4)}
-  else{S.route=VIEWS[h]?h:'overview';S.param=null}
+  else{S.route=VIEWS[h]?h:'accounts';S.param=null}
 }
 function render(keepScroll){
   shell();
   const v=$('#view');
-  const demoable=['overview','tx','accounts','reports','budget'];
+  const demoable=['daily','tx','accounts','reports','budget'];
   v.innerHTML=(S.demo!=='normal'&&demoable.includes(S.route))?demoView(S.demo):VIEWS[S.route]();
   if(!keepScroll)window.scrollTo(0,0);
   bindSwipe();
@@ -851,7 +892,7 @@ function demoView(k){
   if(k==='loading')return bar+skeleton();
   if(k==='error')return bar+`<div class="card">${errorState()}</div>`;
   const map={
-    overview:['還沒有任何紀錄','記下第一筆支出後，這裡會出現本月收支、預算進度和分類占比。'],
+    daily:['還沒有任何紀錄','記下第一筆支出後，這裡會出現本月收支、預算進度和分類占比。'],
     tx:['這段期間沒有交易','按下「記一筆」新增，或從 MOZE 匯入過去的紀錄。'],
     accounts:['還沒有帳戶','先新增現金錢包或銀行帳戶，設定期初餘額。'],
     reports:['這個月份沒有資料','有交易之後，圖表會自動產生。'],
@@ -1385,7 +1426,7 @@ function vSettings(){
 }
 function vMore(){
   return `<div class="card"><div class="mlist">
-   <a href="#tx">${ic('list')}明細<span class="xs mu" style="margin-left:auto">${TX.length} 筆</span>${ic('chev-r','chev')}</a>
+   <a href="#tx">${ic('list')}全部交易<span class="xs mu" style="margin-left:auto">${TX.length} 筆</span>${ic('chev-r','chev')}</a>
    <a href="#accounts">${ic('wallet')}帳戶<span class="xs mu" style="margin-left:auto">${ACCS.filter(a=>!a.archived).length} 個</span>${ic('chev-r','chev')}</a>
    <a href="#budget">${ic('target')}預算・專案・存錢目標${ic('chev-r','chev')}</a>
    <a href="#reconcile">${ic('scale')}對帳<span class="st warn" style="margin-left:auto">! 1</span>${ic('chev-r','chev')}</a>
@@ -1393,7 +1434,7 @@ function vMore(){
    <a href="#stocks" data-a="stocks">${ic('trend')}股票${ic('ext','chev')}</a>
   </div></div>`;
 }
-const VIEWS={overview:vOverview,tx:vTx,accounts:vAccounts,acc:vAcc,reports:vReports,budget:vBudget,reconcile:vReconcile,settings:vSettings,more:vMore};
+const VIEWS={daily:vOverview,tx:vTx,accounts:vAccounts,acc:vAcc,reports:vReports,budget:vBudget,reconcile:vReconcile,settings:vSettings,more:vMore};
 
 /* ================= SHEET: entry + filter ================= */
 const QUICK={expense:[['餐飲','午餐'],['餐飲','飲料'],['餐飲','早餐'],['餐飲','晚餐'],['購物','超市'],['交通','捷運']],income:[['收入','生活費'],['收入','打工'],['收入','獎學金'],['收入','退款']]};
@@ -1532,7 +1573,7 @@ function bindSwipe(){
 function goTx(patch){S.filters=Object.assign({q:'',types:[],accs:[],cats:[],srcs:[],range:'all',min:'',max:''},patch);S.batch=false;S.sel.clear();if(location.hash==='#tx')render();else location.hash='tx'}
 const ACT={
   go(el){const to=el.dataset.to;if(el.dataset.mode){S.rp.mode=el.dataset.mode;S.rp.off=0}if(el.dataset.tab)S.budTab=el.dataset.tab;const anchor=el.dataset.anchor;if(location.hash==='#'+to){render();}else location.hash=to;if(anchor)setTimeout(()=>{const a=document.getElementById(anchor);a&&a.scrollIntoView({behavior:'smooth',block:'center'})},60)},
-  back(){history.length>1?history.back():location.hash='overview'},
+  back(){history.length>1?history.back():location.hash='accounts'},
   add(){openEntry()},
   edit(el){const row=el.closest('.tx');if(row&&row.dataset.dragged)return;const sw=el.closest('.sw');if(sw&&sw.classList.contains('open')&&el.classList.contains('tx-b')){sw.classList.remove('open');sw.querySelector('.tx').style.transform='';return}openEntry(+el.dataset.id)},
   askdel(el){const id=+el.dataset.id,t=TX.find(x=>x.id===id);if(!t)return;dialog('刪除這筆紀錄？',`<p style="margin:0 0 6px"><b>${esc(t.m)}</b> · ${amtHTML(t)} · ${md(t.d)}</p><p class="mu" style="margin:0">30 天內可在 設定 › 最近刪除 中復原。</p>`,'刪除',()=>delTx(id),true)},
@@ -1546,7 +1587,7 @@ const ACT={
   toast(el){toast(el.dataset.msg)},
   demo(el){S.demo=el.dataset.v;render(true);if(S.demo!=='normal'&&S.route==='settings')toast('到總覽或明細看看效果')},
   retry(){S.demo='loading';render(true);setTimeout(()=>{S.demo='normal';render(true)},900)},
-  /* overview drill-downs */
+  /* daily drill-downs */
   'kpi-inc'(){goTx({range:'month',types:['income']})},
   'kpi-exp'(){goTx({range:'month',types:['expense']})},
   'kpi-net'(){goTx({range:'month'})},
