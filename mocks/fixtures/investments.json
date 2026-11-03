@@ -1,0 +1,4 @@
+[
+  { "account_key": "Cathay_Securities", "name": "國泰證券（投資）", "market_value": { "amount": "312400", "currency": "TWD" }, "as_of": "2026-11-03T13:35:00+08:00", "link": "/portfolio" },
+  { "account_key": "Firstrade_USD", "name": "Firstrade 美股", "market_value": { "amount": "4820.55", "currency": "USD" }, "as_of": "2026-10-20T05:00:00+08:00", "link": "/portfolio" }
+]

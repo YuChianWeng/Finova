@@ -1,0 +1,7 @@
+[
+  { "project_id": "p_tokyo", "name": "日本東京 5 天", "start_date": "2026-12-20", "end_date": "2026-12-24", "status": "planned", "count_in_monthly_budget": false,
+    "budgets": [ { "currency": "TWD", "total": "40000", "by_category": [ { "category_key": "food", "amount": "8000" }, { "category_key": "transport", "amount": "14000" } ] }, { "currency": "JPY", "total": "30000", "by_category": [] } ],
+    "note": "機票、住宿已付" },
+  { "project_id": "p_tainan", "name": "台南畢旅 3 天", "start_date": "2026-04-03", "end_date": "2026-04-05", "status": "closed", "count_in_monthly_budget": false,
+    "budgets": [ { "currency": "TWD", "total": "6000", "by_category": [] } ], "note": null }
+]

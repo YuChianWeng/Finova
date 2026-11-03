@@ -1,0 +1,21 @@
+{
+  "name": "finova-ledger-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Finova 記帳前端（/finance），依 FRONTEND-CONTRACT v1.0 開發",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "vite --mode api",
+    "build": "tsc --noEmit && vite build",
+    "build:preview": "tsc --noEmit && vite build --mode preview && node scripts/inline-preview.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,9 @@
+{ "effective_from": "2026-09", "lines": [
+  { "category_key": null, "amount": "13000" },
+  { "category_key": "food", "amount": "6000" },
+  { "category_key": "transport", "amount": "2000" },
+  { "category_key": "shopping", "amount": "2000" },
+  { "category_key": "entertainment", "amount": "1500", "rollover": true },
+  { "category_key": "subscription", "amount": "500" },
+  { "category_key": "other", "amount": "1000" }
+] }

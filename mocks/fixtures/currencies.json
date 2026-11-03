@@ -1,0 +1,6 @@
+[
+  { "code": "TWD", "name": "新台幣", "symbol": "NT$", "decimals": 0 },
+  { "code": "USDT", "name": "泰達幣", "symbol": "USDT", "decimals": 2 },
+  { "code": "JPY", "name": "日圓", "symbol": "¥", "decimals": 0 },
+  { "code": "USD", "name": "美元", "symbol": "US$", "decimals": 2 }
+]

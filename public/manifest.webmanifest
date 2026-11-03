@@ -1,0 +1,11 @@
+{
+  "name": "Finova 記帳",
+  "short_name": "記帳",
+  "start_url": "/finance/accounts",
+  "scope": "/finance/",
+  "display": "standalone",
+  "background_color": "#151618",
+  "theme_color": "#151618",
+  "lang": "zh-Hant-TW",
+  "icons": [{ "src": "/finance/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -1,0 +1,36 @@
+{
+  "_note": "DESIGN-BRIEF §8 的固定交易＋契約 §7 要求的情境。1–10 月其餘紀錄由 mocks/db.ts 依 history.json 決定性產生。",
+  "fixed": [
+    { "d": "2026-11-03", "t": "18:45", "m": "全聯", "type": "expense", "cat": "shopping.grocery", "acc": "Cube_Card", "amt": "270", "src": "iphone_shortcut", "edited": { "at": "2026-11-03T18:52:00+08:00", "from_acc": "Wallet_TWD" } },
+    { "d": "2026-11-03", "t": "15:20", "m": "50嵐", "type": "expense", "cat": "food.drink", "acc": "LineBank", "amt": "55", "src": "chat_bot" },
+    { "d": "2026-11-03", "t": "12:30", "m": "學餐", "type": "expense", "cat": "food.lunch", "acc": "EasyCard", "amt": "95", "src": "web" },
+    { "d": "2026-11-03", "t": "08:10", "m": "美而美", "type": "expense", "cat": "food.breakfast", "acc": "Wallet_TWD", "amt": "65", "src": "iphone_shortcut" },
+    { "d": "2026-11-02", "t": "21:10", "m": "7-ELEVEN", "type": "expense", "cat": "food.snack", "acc": "EasyCard", "amt": "95", "src": "iphone_shortcut" },
+    { "d": "2026-11-02", "t": "10:00", "m": "生活費", "type": "income", "cat": "income.allowance", "acc": "ESunBank", "amt": "3500", "src": "auto", "rule": "r_allowance" },
+    { "d": "2026-11-02", "t": "09:00", "m": "Spotify", "type": "expense", "cat": "subscription.streaming", "acc": "Cube_Card", "amt": "149", "src": "auto", "tags": ["t_recur"] },
+    { "d": "2026-11-01", "t": "19:30", "m": "巷口麵店", "type": "expense", "cat": "food.dinner", "acc": "Wallet_TWD", "amt": "320", "src": "web", "note": "牛肉麵＋小菜" },
+    { "d": "2026-11-01", "t": "14:00", "m": "高鐵 台北→台中", "type": "expense", "cat": "transport.hsr", "acc": "Cube_Card", "amt": "1490", "src": "web", "tags": ["t_home"] },
+    { "d": "2026-11-01", "t": "09:00", "m": "家教打工", "type": "income", "cat": "income.parttime", "acc": "ESunBank", "amt": "4000", "src": "web" },
+
+    { "d": "2026-10-31", "t": "20:15", "m": "Uber Eats", "type": "expense", "cat": "food.dinner", "acc": "ESun_Unicard", "amt": "268", "src": "moze_import" },
+    { "d": "2026-10-30", "t": "16:40", "m": "誠品書店", "type": "expense", "cat": "learning.books", "acc": "ESun_Unicard", "amt": "420", "src": "moze_import" },
+    { "d": "2026-10-30", "t": "12:05", "m": "LINE Pay 付款", "type": "expense", "cat": "uncategorized", "acc": "LineBank", "amt": "150", "src": "chat_bot" },
+    { "d": "2026-10-30", "t": "09:12", "m": "Proton VPN", "type": "expense", "cat": "subscription.software", "acc": "Binance_USDT", "amt": "4.99", "cur": "USDT", "src": "web", "note": "USDT 付款" },
+    { "d": "2026-10-29", "t": "22:40", "m": "ATM 跨行提款", "type": "expense", "cat": "uncategorized", "acc": "ESunBank", "amt": "15", "src": "auto" },
+    { "d": "2026-10-29", "t": "18:20", "m": "夜市小吃", "type": "expense", "cat": "uncategorized", "acc": "Wallet_TWD", "amt": "80", "src": "iphone_shortcut" },
+    { "d": "2026-10-29", "t": "08:00", "m": "捷運定期票", "type": "expense", "cat": "transport.mrt", "acc": "LineBank", "amt": "1280", "src": "moze_import" },
+    { "d": "2026-10-26", "t": "19:40", "m": "社團聚餐", "type": "expense", "cat": "food", "acc": "Wallet_TWD", "amt": "450", "src": "chat_bot", "tags": ["t_party"], "note": "只掛主分類" },
+    { "d": "2026-10-20", "t": "11:00", "m": "轉到 LINE Bank", "type": "transfer", "acc": "ESunBank", "to": "LineBank", "amt": "1000", "src": "web" },
+    { "d": "2026-10-15", "t": "22:10", "m": "Agoda 新宿住宿 4 晚", "type": "expense", "cat": "home.lodging", "acc": "Cube_Card", "amt": "7400", "src": "web", "proj": "p_tokyo" },
+    { "d": "2026-10-12", "t": "21:30", "m": "長榮航空 來回機票", "type": "expense", "cat": "transport.flight", "acc": "Cube_Card", "amt": "11200", "src": "web", "proj": "p_tokyo" },
+    { "d": "2026-10-05", "t": "09:30", "m": "繳 Cube 卡費（9 月帳單）", "type": "credit_card_payment", "acc": "ESunBank", "to": "Cube_Card", "amt": "4980", "src": "web" },
+
+    { "d": "2026-04-05", "t": "19:00", "m": "阿霞飯店", "type": "expense", "cat": "food.dinner", "acc": "Cube_Card", "amt": "1280", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-04", "t": "12:20", "m": "國華街小吃", "type": "expense", "cat": "food.lunch", "acc": "Wallet_TWD", "amt": "860", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-03", "t": "18:10", "m": "林百貨周邊晚餐", "type": "expense", "cat": "food.dinner", "acc": "Wallet_TWD", "amt": "720", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-03", "t": "08:30", "m": "台鐵 台北→台南", "type": "expense", "cat": "transport.train", "acc": "EasyCard", "amt": "738", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-05", "t": "16:00", "m": "台鐵 台南→台北", "type": "expense", "cat": "transport.train", "acc": "EasyCard", "amt": "738", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-04", "t": "09:30", "m": "YouBike 與公車", "type": "expense", "cat": "transport.bus", "acc": "EasyCard", "amt": "164", "src": "moze_import", "proj": "p_tainan" },
+    { "d": "2026-04-04", "t": "15:00", "m": "奇美博物館", "type": "expense", "cat": "entertainment.travel", "acc": "Cube_Card", "amt": "920", "src": "moze_import", "proj": "p_tainan" }
+  ]
+}

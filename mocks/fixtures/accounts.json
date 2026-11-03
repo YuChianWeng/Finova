@@ -1,0 +1,17 @@
+[
+  { "account_key": "Wallet_TWD", "name": "現金錢包", "group": "cash", "currency": "TWD", "icon": "wallet", "aliases": ["錢包", "現金"], "balance": "1240", "reconcile": { "reminder_days": 30 } },
+  { "account_key": "ESunBank", "name": "玉山銀行", "group": "bank", "currency": "TWD", "icon": "bank", "aliases": ["玉山"], "balance": "24549", "reconcile": { "reminder_days": 30 } },
+  { "account_key": "LineBank", "name": "LINE Bank", "group": "bank", "currency": "TWD", "icon": "bank", "aliases": ["LINE"], "balance": "8300", "reconcile": { "reminder_days": 30 } },
+  { "account_key": "Cathay_Sub", "name": "國泰生活子帳戶", "group": "bank", "currency": "TWD", "icon": "bank", "aliases": ["國泰"], "balance": "5120", "reconcile": { "reminder_days": 30 } },
+  { "account_key": "Cube_Card", "name": "Cube 信用卡", "group": "credit_card", "currency": "TWD", "icon": "card", "aliases": ["Cube"], "balance": "-6354", "reconcile": { "reminder_days": 30 },
+    "credit_card": { "statement_day": 22, "due_day": 7, "credit_limit": "60000",
+      "current_statement": { "period_start": "2026-09-23", "period_end": "2026-10-22", "amount": "4980", "due_date": "2026-11-07", "paid": "0" } } },
+  { "account_key": "ESun_Unicard", "name": "玉山 Unicard", "group": "credit_card", "currency": "TWD", "icon": "card", "aliases": ["Unicard"], "balance": "-1230", "reconcile": { "reminder_days": 30 },
+    "credit_card": { "statement_day": 25, "due_day": 10, "credit_limit": "40000",
+      "current_statement": { "period_start": "2026-09-26", "period_end": "2026-10-25", "amount": "1230", "due_date": "2026-11-10", "paid": "0" } } },
+  { "account_key": "EasyCard", "name": "悠遊卡", "group": "stored_value", "currency": "TWD", "icon": "ticket", "aliases": ["悠遊"], "balance": "386", "reconcile": { "reminder_days": 45 } },
+  { "account_key": "Binance_USDT", "name": "幣安 USDT 錢包", "group": "cash", "currency": "USDT", "icon": "wallet", "aliases": ["USDT"], "balance": null,
+    "latest_snapshot": { "amount": { "amount": "111.13", "currency": "USDT" }, "as_of": "2026-10-30T21:00:00+08:00" }, "reconcile": { "reminder_days": 60 } },
+  { "account_key": "Policy_Loan", "name": "儲蓄險保單借款", "group": "liability", "currency": "TWD", "icon": "debt", "aliases": ["保單借款"], "balance": "-200000", "reconcile": { "reminder_days": 90 } },
+  { "account_key": "Richart", "name": "台新 Richart", "group": "bank", "currency": "TWD", "icon": "bank", "aliases": [], "balance": "0", "is_archived": true, "reconcile": { "reminder_days": 30 } }
+]

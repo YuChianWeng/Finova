@@ -1,0 +1,14 @@
+[
+  { "key": "food", "name": "餐飲", "kind": "expense", "icon": "food", "children": [["breakfast","早餐"],["lunch","午餐"],["dinner","晚餐"],["snack","點心"],["drink","飲料"],["alcohol","酒類"]] },
+  { "key": "transport", "name": "交通", "kind": "expense", "icon": "bus", "children": [["mrt","捷運"],["bus","公車"],["train","火車"],["hsr","高鐵"],["taxi","計程車"],["fuel","加油"],["flight","機票"]] },
+  { "key": "shopping", "name": "購物", "kind": "expense", "icon": "bag", "children": [["daily","日用品"],["clothes","衣物"],["electronics","3C"],["grocery","超市"]] },
+  { "key": "entertainment", "name": "娛樂", "kind": "expense", "icon": "play", "children": [["movie","電影"],["game","遊戲"],["party","聚會"],["travel","旅遊"]] },
+  { "key": "home", "name": "居家", "kind": "expense", "icon": "house", "children": [["rent","房租"],["utilities","水電"],["internet","網路"],["lodging","住宿"]] },
+  { "key": "learning", "name": "學習", "kind": "expense", "icon": "book", "children": [["books","書籍"],["course","課程"],["exam","考試"]] },
+  { "key": "medical", "name": "醫療", "kind": "expense", "icon": "med", "children": [["clinic","看診"],["medicine","藥品"],["glasses","眼鏡"]] },
+  { "key": "subscription", "name": "訂閱", "kind": "expense", "icon": "repeat", "children": [["streaming","串流"],["cloud","雲端"],["software","軟體"]] },
+  { "key": "personal", "name": "個人", "kind": "expense", "icon": "tag", "children": [["fee","手續費"],["haircut","美髮"],["gift","禮物"]] },
+  { "key": "other", "name": "其他", "kind": "expense", "icon": "dots", "children": [] },
+  { "key": "income", "name": "收入", "kind": "income", "icon": "in", "children": [["allowance","生活費"],["parttime","打工"],["scholarship","獎學金"],["refund","退款"],["interest","利息"]] },
+  { "key": "uncategorized", "name": "未分類", "kind": "system", "icon": "alert", "children": [] }
+]
