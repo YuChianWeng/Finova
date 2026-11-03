@@ -8,7 +8,7 @@
 const VERSION = "finova-v1";
 const API_CACHE = `${VERSION}-api`, APP_CACHE = `${VERSION}-app`;
 
-self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(["/finance/", "/finance/manifest.webmanifest", "/finance/icon.svg"]).catch(() => {}))); });
+self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(APP_CACHE).then((c) => c.addAll(["/finance/", "/finance/manifest.webmanifest", "/finance/logo-192.png", "/finance/apple-touch-icon.png"]).catch(() => {}))); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 
 function cacheableApi(url) {

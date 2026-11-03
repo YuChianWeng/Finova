@@ -1,10 +1,117 @@
-# Finova 記帳（前端）
+<p align="center"><img src="docs/logo.png" width="120" alt="Finova logo"></p>
 
-依 **FRONTEND-CONTRACT v1.0（凍結版）** 開發的記帳前端。頁面在 `/finance`，只呼叫 `/api/ledger/*`。後端還沒好之前，用 `mocks/` 裡的 mock API 開發。
+<h1 align="center">Finova 記帳</h1>
 
-- 首頁：帳戶總覽 `/finance/accounts`（iOS 加到主畫面的 `start_url`）
-- 第二頁：每日明細 `/finance`（月曆＋當日明細＋本月總覽，對應契約的「總覽」）
-- 深色／淺色主題，手機與桌面版
+<p align="center">給學生與小資族的個人記帳 App：帳戶總覽、每日明細、報表、預算、存錢目標與對帳，深色／淺色主題，手機與桌面都能用。</p>
+
+<p align="center">
+  <img src="docs/screenshots/phone-accounts-dark.webp" width="220" alt="帳戶總覽（深色）">
+  <img src="docs/screenshots/phone-daily-dark.webp" width="220" alt="每日明細（深色）">
+  <img src="docs/screenshots/phone-entry-light.webp" width="220" alt="記一筆（淺色）">
+</p>
+
+<p align="center"><img src="docs/screenshots/desktop-daily-dark.webp" width="860" alt="桌面版每日明細"></p>
+
+---
+
+## 使用者介紹
+
+### 誰適合用
+
+- 有好幾個帳戶要管：現金、銀行、LINE Bank、悠遊卡、信用卡，甚至 USDT 或美股帳戶。
+- 想知道錢花去哪裡、這個月還能花多少。
+- 用 iPhone 捷徑、聊天機器人或從 MOZE 匯入記帳，需要一個地方把所有紀錄看清楚、改正確。
+
+### 畫面導覽
+
+手機底部有五個按鈕（桌面版在左側選單）：
+
+| 按鈕 | 頁面 | 做什麼 |
+|---|---|---|
+| 錢包 | **帳戶總覽**（首頁） | 淨資產總額、總資產／總負債、每週或每月收支圖、各帳戶餘額 |
+| 月曆 | **每日明細** | 點月曆上的日期看當天紀錄；下方是本月收支、預算、待處理事項 |
+| ＋ | **記一筆** | 支出、收入或轉帳 |
+| 長條圖 | **報表** | 日、週、月、年報表與分類趨勢 |
+| 齒輪 | **更多** | 全部交易、預算、對帳、設定 |
+
+### 帳戶總覽
+
+<img src="docs/screenshots/phone-accounts-light.webp" width="220" align="right" alt="帳戶總覽（淺色）">
+
+- 最上面的大數字是 **新台幣淨資產**（現金＋投資 − 信用卡 − 負債）。USDT、美元等其他幣別另外列出，**不會換算或加總**。
+- 👁 按鈕可以一鍵模糊所有金額，在公共場合打開 App 也不怕被看到。
+- 「各分組占比」「各幣種」可以看資產分布。
+- 帳戶依類型分組，可收合。信用卡顯示「欠款」與繳款倒數，太久沒對帳的帳戶會標橘色提醒。
+- 點任何帳戶進入詳情：餘額走勢、對帳點、最近明細；信用卡還有本期帳單與「繳卡費」按鈕。
+
+<br clear="right">
+
+### 記一筆
+
+1. 按下方 **＋**（桌面版右上「記一筆」）。
+2. 選 **支出／收入／轉帳**，用數字鍵盤輸入金額。
+3. 點「常用」快速選分類，或從主分類 › 子分類挑選（只選主分類也可以）。
+4. 選帳戶、日期；商家欄打幾個字會跳出以前記過的商家，選了自動帶入分類和帳戶。
+5. 按 **儲存**；要連續記好幾筆就按 **再記一筆**。
+
+- 存完畫面下方會出現「復原」，記錯可以馬上撤回。
+- 轉帳到信用卡會自動記成「繳卡費」；跨幣別轉帳（例如台幣換 USDT）要填轉入金額。
+- 交易列 **往左滑** 可以編輯或刪除；刪除的紀錄 30 天內可在「設定 › 最近刪除」復原。
+
+### 每日明細與全部交易
+
+<img src="docs/screenshots/phone-transactions-dark.webp" width="220" align="right" alt="全部交易">
+
+- 月曆上有小圓點的日期代表有紀錄，點日期看當天明細；拉下方的橫條可以收合成一週。
+- 「待處理」會提醒：多久沒對帳、未分類的交易、即將到期的週期扣款與信用卡帳單、預算快用完。
+- **全部交易** 可以搜尋商家與備註，用篩選選日期、類型、帳戶、分類、來源、標籤、金額範圍。
+- 按 **批次** 一次修改多筆的分類、帳戶、標籤、專案，或一次刪除。
+- 桌面版可以把篩選結果 **匯出 CSV**。
+
+<br clear="right">
+
+### 報表
+
+<p><img src="docs/screenshots/desktop-reports-light.webp" width="860" alt="月報表"></p>
+
+- **月報**：收入、支出、淨額、儲蓄率與上月比較；每日支出圖（可拖動看當天數字）、分類占比（點扇區看子分類）、商家前 10 名、預算達成、固定 vs 變動支出。
+- 「排除專案支出」可以把旅行等專案花費拿掉，看日常開銷。
+- **年報**：每月收支、各分類每月組成、月平均與最高／最低月份。
+- **趨勢**：選一個分類或商家，看每日／每週／每月的花費變化。
+
+### 預算、專案、存錢目標
+
+<p><img src="docs/screenshots/desktop-budgets-dark.webp" width="860" alt="每月預算"></p>
+
+- **每月預算**：設定月總預算和各分類上限。用到 80% 變橘色、超過變紅色條紋；也會依目前速度推估月底花費。第一次使用可以「用過去 3 個月平均快速建立」。
+- **專案**：旅行或活動可以獨立設預算（可同時有台幣和日圓預算），看已花、剩餘、每日可用。
+- **存錢目標**：設定目標金額與期限，記錄存入／取出，App 會算出每月還要存多少、預計哪個月達成。
+
+<p><img src="docs/screenshots/desktop-goals-light.webp" width="860" alt="存錢目標"></p>
+
+### 對帳
+
+<p><img src="docs/screenshots/desktop-reconcile-dark.webp" width="860" alt="對帳"></p>
+
+1. 選帳戶，輸入銀行 App 上看到的實際餘額（信用卡請填目前欠款）。
+2. App 比對計算出的餘額，告訴你差多少。
+3. 有差額時可以：檢查上次對帳後的交易找漏記、記一筆「餘額調整」（不計入收支），或先保留差額之後再處理。
+
+### 離線與同步
+
+- 沒有網路時仍然可以記帳，紀錄會標「待同步」，連上網路後自動送出。
+- 離線時可以看最近一次載入的資料；編輯、刪除和對帳要等連線後再做。
+- 登入過期時，填到一半的表單會自動暫存，重新登入後還原。
+
+### 加到 iPhone 主畫面
+
+用 Safari 開啟 `/finance`，按「分享 › 加入主畫面」，就會出現 Finova 圖示，開啟後直接進入帳戶總覽，像一般 App 一樣全螢幕使用。
+
+---
+
+# 開發者說明
+
+依 **FRONTEND-CONTRACT v1.0（凍結版）** 開發。頁面在 `/finance`，只呼叫 `/api/ledger/*`；後端完成前用 `mocks/` 的 mock API 開發。
 
 ## 開始
 
@@ -37,6 +144,8 @@ npm run build                                    # 正式版輸出到 dist/（�
 | `src/views/*` | 各頁面 |
 | `src/ui/entry.ts` | ＋ 記一筆／編輯表單 |
 | `public/sw.js` | Service worker：離線時讀快取（catalog、overview、最近一頁明細） |
+| `public/logo-*.png`、`apple-touch-icon.png`、`icon-maskable-*.png` | App 圖示（一般／iOS／Android 自適應） |
+| `docs/` | README 用的 logo 與截圖 |
 | `mocks/fixtures/*.json` | DESIGN-BRIEF §8 的假資料，加上契約 §7 要求的情境 |
 | `mocks/db.ts`、`mocks/handlers.ts` | 記憶體資料庫、各端點實作 |
 | `mocks/browser.ts` | 在瀏覽器攔截 `fetch('/api/ledger/*')`、模擬錯誤 |
