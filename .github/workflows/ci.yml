@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build (production, no mock)
+        run: npm run build
+
+      - name: Production bundle must not include mock data
+        run: |
+          if grep -rl "MOCK_NOW\|mocks/fixtures" dist/assets/*.js; then
+            echo "::error::mock code found in production bundle"; exit 1
+          fi
+
+      - name: Build (single-file preview with mock)
+        run: npm run build:preview
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finova-dist
+          path: |
+            dist/
+            dist-preview/finova-preview.html
+          retention-days: 14
