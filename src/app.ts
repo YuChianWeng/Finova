@@ -4,6 +4,7 @@ import { app, getCatalog } from "./state";
 import { current, navigate, back, href, type Route } from "./router";
 import { skeleton, errorState, emptyState } from "./ui/components";
 import { closeSheet, dialogOpen, dlgConfirm, dlgDismiss, runUndo, sheetOpen, toast } from "./ui/overlay";
+import { openRemind, refreshRemind, bindRemind } from "./ui/remind";
 import { LedgerError } from "./api/client";
 import { api } from "./api/ledger";
 
@@ -136,7 +137,7 @@ export async function reload() {
   const y = window.scrollY; paint(); window.scrollTo(0, y);
 }
 export async function refreshAlerts() {
-  try { const o = await api.overview(); app.alerts = o.alerts; shell(); } catch { /* 提醒失敗不影響頁面 */ }
+  try { const o = await api.overview(); app.alerts = o.alerts; shell(); refreshRemind(); } catch { /* 提醒失敗不影響頁面 */ }
 }
 export const go = (p: string, replace = false) => navigate(p, { replace });
 
@@ -174,11 +175,13 @@ actions({
   "dlg-cancel"() { dlgDismiss(); },
   undo() { runUndo(); },
   sfull() { $("#sheet")!.classList.toggle("full"); },
-  bell() { navigate(""); setTimeout(() => $("#remind")?.scrollIntoView({ behavior: "smooth", block: "center" }), 400); },
+  // 鈴鐺：在目前頁面開啟待處理面板，不換頁、不捲動（issue #7）；開啟時順便更新提醒
+  bell(el) { openRemind(el); refreshAlerts(); },
   go(el) { navigate(el.dataset.to!); },
 });
 
 export function startEvents() {
+  bindRemind();
   document.addEventListener("click", (e) => {
     const el = (e.target as Element).closest?.("[data-a]") as HTMLElement | null; if (!el) return;
     const f = ACT[el.dataset.a!]; if (!f) return;
