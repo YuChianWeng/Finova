@@ -283,12 +283,6 @@ select.in{appearance:auto}
 .amt-box .sg{font:600 34px var(--f-m);color:var(--mu)}
 .amt-in{flex:1;min-width:0;width:100%;font:600 44px/1.1 var(--f-m);font-variant-numeric:tabular-nums;background:none;border:0;color:var(--tx);text-align:right;padding:0;outline:none}
 .amt-in::placeholder{color:var(--ln2)}
-.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.keypad button{min-height:50px;border-radius:10px;border:1px solid var(--ln);background:var(--s2);font:500 22px var(--f-m);cursor:pointer;color:var(--tx);display:grid;place-items:center}
-.keypad button:active{background:var(--s3)}
-.catgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
-.catbtn{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px;min-height:64px;border-radius:10px;border:1px solid var(--ln);background:var(--s2);cursor:pointer;font:500 12px var(--f-b);color:var(--tx)}
-.catbtn[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-soft)}
 .sugg{display:flex;flex-direction:column;border:1px solid var(--ln2);border-radius:var(--r-m);overflow:hidden}
 .sugg button{display:flex;justify-content:space-between;gap:8px;min-height:44px;padding:0 12px;border:0;border-bottom:1px solid var(--ln);background:var(--s2);cursor:pointer;text-align:left;font:14px var(--f-b);color:var(--tx)}
 .sugg button:last-child{border-bottom:0}
@@ -564,7 +558,7 @@ html.standalone body::before{background:var(--sb)}
 
 /* iOS：輸入框字級 < 16px 時聚焦會自動放大畫面（TECH-SPEC §13.1），觸控裝置一律 16px */
 @media (hover:none) and (pointer:coarse){
-  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea,.in{font-size:16px!important}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not(.amt-in),select,textarea,.in{font-size:16px!important}
 }
 
 /* 鈴鐺：待處理面板（issue #7）。手機是底部面板（避開手勢條），桌面是鈴鐺下方的彈出面板 */
@@ -581,3 +575,96 @@ html.standalone body::before{background:var(--sb)}
 
 /* 每日明細標題列：選到的日期不是今天時，日期旁的「今天」chip（issue #9） */
 .today-chip{min-height:30px;padding:0 10px;font-size:12px;margin:0 6px 0 2px;flex:none;border-color:var(--ac-line);color:var(--ac)}
+
+/* ================================================================ 記一筆（issue #10） */
+/* 外框：手機全螢幕、桌面右側抽屜；頂部 ✕／標題／✓ */
+@media (max-width:959.98px){
+  .sheet.entry{max-height:100%;height:100%;border-radius:0;border-top:0;padding-top:var(--sat)}
+}
+.eh{display:flex;align-items:center;gap:8px;padding:8px var(--gutr) 8px var(--gut);border-bottom:1px solid var(--ln);flex:none}
+.eh .h2{flex:1;text-align:center;margin:0}
+.eh .eh-ok{color:var(--ac)}
+.eh .eh-ok[disabled]{opacity:.35}
+.entry-b{gap:16px;padding-top:0;padding-bottom:calc(24px + var(--sab))}
+#entry-page .eh{padding:0 0 12px;margin-bottom:4px}
+#entry-page .entry-b{padding:12px 0 0;overflow:visible}
+
+/* 類型分頁：可以橫向捲動，選中的有底線 */
+.etabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--ln);margin:0 calc(-1 * var(--gutr)) 0 calc(-1 * var(--gut));padding:0 var(--gutr) 0 var(--gut);flex:none}
+.etabs::-webkit-scrollbar{display:none}
+.etabs button{position:relative;flex:none;min-height:44px;padding:0 12px;border:0;background:none;color:var(--mu);font:500 14px var(--f-b);cursor:pointer;white-space:nowrap}
+.etabs button[aria-selected="true"]{color:var(--tx);font-weight:700}
+.etabs button[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:3px;border-radius:3px;background:var(--ac)}
+.etabs button[disabled]{opacity:.35;cursor:default}
+.etabs .soon-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--mu);margin-left:4px;vertical-align:super;opacity:.6}
+@media (min-width:960px){ .etabs{margin:0 -24px;padding:0 24px} }
+
+/* 分類格：5 欄圓形彩色圖示，固定 2 列，多的往下捲 */
+.cgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-auto-rows:80px;gap:4px;max-height:164px;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;padding:2px}
+.cg{scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:5px;padding:4px 0;border:0;background:none;cursor:pointer;color:var(--tx);font:500 12px/1.2 var(--f-b);min-width:0;position:relative}
+.cg-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--cc,var(--s3));color:var(--on-cat);flex:none;transition:box-shadow .15s}
+.cg-ic .ic{width:22px;height:22px}
+.cg-n{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.cg-s{position:absolute;top:0;right:6px;font-size:9.5px;padding:0 4px;border-radius:6px;background:var(--s2);color:var(--mu);border:1px solid var(--ln)}
+/* 選中：外圍一圈外框＋勾勾，不只靠顏色 */
+.cg[aria-pressed="true"] .cg-ic{box-shadow:0 0 0 2px var(--s1),0 0 0 4.5px var(--tx)}
+.cg[aria-pressed="true"] .cg-n{font-weight:700}
+.cg[aria-pressed="true"]::after{content:"✓";position:absolute;top:30px;left:calc(50% + 12px);width:17px;height:17px;border-radius:50%;background:var(--tx);color:var(--bg);font:700 11px/17px var(--f-m);text-align:center}
+.cg.back .cg-ic{filter:brightness(.6) saturate(.7)}
+.cg.add .cg-ic{background:none;border:1.5px dashed var(--ln2);color:var(--mu)}
+.cg:focus-visible{outline:none}
+.cg:focus-visible .cg-ic{box-shadow:0 0 0 3px var(--ac-line)}
+.cg-hint{margin:2px 0 0}
+
+/* 即將推出 */
+.soon{display:flex;gap:12px;align-items:flex-start;padding:16px;border:1px dashed var(--ln2);border-radius:var(--r-l);color:var(--mu)}
+.soon b{color:var(--tx)}
+.soon p{margin:6px 0 10px}
+
+/* 金額與名稱：左邊相片按鈕，右邊金額列＋名稱列 */
+.amtblk{display:flex;gap:12px;align-items:stretch}
+.photo{flex:none;width:76px;min-height:76px;border-radius:14px;border:1.5px dashed var(--ln2);background:var(--s2);color:var(--mu);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 10px var(--f-b);cursor:pointer;opacity:.7}
+.photo .ic{width:24px;height:24px}
+.amtcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.arow{display:flex;align-items:center;gap:8px;border-bottom:2px solid var(--ac);padding-bottom:4px}
+.arow.bad{border-color:var(--dg)}
+.cur-chip{flex:none;min-height:32px;padding:0 10px;border-radius:99px;border:1px solid var(--ln2);background:var(--s2);color:var(--tx);font:600 13px var(--f-m);cursor:pointer;appearance:none;-webkit-appearance:none;text-align:center}
+.cur-chip.static{display:inline-grid;place-items:center;cursor:default;color:var(--mu)}
+.amt-in{flex:1;min-width:0;width:100%;font:600 34px/1.15 var(--f-m);font-variant-numeric:tabular-nums;background:none;border:0;color:var(--tx);text-align:right;padding:0;outline:none}
+.amt-in.sm{font-size:24px}
+.amt-in::placeholder{color:var(--ln2)}
+.calc-btn{flex:none;width:36px;height:36px;min-height:36px;border-radius:10px;background:var(--s2);border:1px solid var(--ln)}
+.calc-hint{margin:0;text-align:right;font:500 13px var(--f-m);color:var(--ac)}
+.calc-hint.bad{color:var(--dg)}
+.nrow{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--ln);color:var(--mu)}
+.nrow.bad{border-color:var(--dg)}
+.nrow input{flex:1;min-width:0;min-height:44px;border:0;background:none;color:var(--tx);font:15px var(--f-b);outline:none;padding:0}
+.nrow input::placeholder{color:var(--mu)}
+#sugg:empty{display:none}
+
+/* 兩欄欄位按鈕 */
+.fgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.fbtn{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:56px;padding:6px 30px 6px 12px;border-radius:12px;border:1px solid var(--ln);background:var(--s2);color:var(--tx);text-align:left;cursor:pointer;font:inherit;min-width:0;overflow:hidden}
+.fbtn .fl{font-size:11px;color:var(--mu)}
+.fbtn .fv{font-size:14px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fbtn.empty .fv{color:var(--mu);font-weight:400}
+.fbtn > .ic{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--mu)}
+.fbtn.bad{border-color:var(--dg)}
+.fbtn[aria-disabled="true"]{opacity:.5;cursor:default}
+.fbtn:focus-within{border-color:var(--ac)}
+/* 日期／時間：透明的原生 input 蓋在按鈕上，iOS 點了直接開原生選擇器 */
+.fbtn-in{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0;margin:0}
+.fv-in{width:100%;border:0;background:none;color:var(--tx);font:500 14px var(--f-m);padding:0;outline:none}
+
+/* 選擇器 */
+.pick{display:flex;flex-direction:column;gap:8px}
+.pick-h{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.pick-l{display:flex;flex-direction:column;border:1px solid var(--ln);border-radius:var(--r-l);overflow:hidden}
+.opt-row{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border:0;border-bottom:1px solid var(--ln);background:var(--s1);color:var(--tx);font:15px var(--f-b);text-align:left;cursor:pointer}
+.opt-row:last-child{border-bottom:0}
+.opt-row[aria-pressed="true"]{background:var(--ac-soft);font-weight:600}
+.opt-row .grow{flex:1;min-width:0}
+
+.note-in{min-height:64px;padding:10px 12px;resize:vertical;line-height:1.5}
+.e-more{flex-wrap:wrap}
+.e-more .btn{flex:1}

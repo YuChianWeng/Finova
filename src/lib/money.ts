@@ -116,3 +116,43 @@ export function div(a: string, n: number, decimals = SCALE): string {
 }
 /** a × m ÷ n（例如週預算＝月預算 × 7 ÷ 30），四捨五入到小數 decimals 位。 */
 export const mulDiv = (a: string, m: number, n: number, decimals = SCALE) => div(fromUnits(toUnits(a) * BigInt(m)), n, decimals);
+
+/**
+ * 金額欄的簡易計算機（issue #10）：支援 + − × ÷ 與小數，例如 "120+35"、"1,200÷3"。
+ * 用十進位定點運算，不經過浮點數。沒有運算子時原樣回傳（交給一般驗證）；算式看不懂時回傳 null。
+ * 有運算子時，結果四捨五入到該幣別的小數位數。
+ */
+export const hasOperator = (s: string) => /[+\-*/×÷＋−]/.test(s.replace(/^[+-]/, ""));
+export function calc(expr: string, decimals = SCALE): string | null {
+  const s = expr.replace(/[,\s]/g, "").replace(/[＋]/g, "+").replace(/[−–]/g, "-").replace(/[×xX]/g, "*").replace(/÷/g, "/");
+  if (!s) return "";
+  if (!hasOperator(s)) return s;
+  const toks = s.match(/\d*\.?\d+|\d+\.|[+\-*/]/g);
+  if (!toks || toks.join("") !== s) return null;
+  // 先算乘除，再算加減
+  const nums: bigint[] = [], ops: string[] = [];
+  let i = 0, expectNum = true;
+  const mul = (a: bigint, b: bigint) => (a * b) / F;
+  const dv = (a: bigint, b: bigint) => { if (b === 0n) throw new Error("÷0"); const q = (a * F * 2n) / b; return (q + (q < 0n ? -1n : 1n)) / 2n; };
+  try {
+    while (i < toks.length) {
+      const t = toks[i];
+      if (expectNum) {
+        let neg = false;
+        if (t === "-" || t === "+") { neg = t === "-"; i++; }
+        const n = toks[i]; if (n === undefined || /[+\-*/]/.test(n)) return null;
+        let v = toUnits(n); if (neg) v = -v;
+        const op = ops[ops.length - 1];
+        if (op === "*" || op === "/") { ops.pop(); const a = nums.pop()!; v = op === "*" ? mul(a, v) : dv(a, v); }
+        nums.push(v); expectNum = false; i++;
+      } else {
+        if (!/[+\-*/]/.test(t)) return null;
+        ops.push(t); expectNum = true; i++;
+      }
+    }
+    if (expectNum) return null; // 結尾是運算子
+    let r = nums[0];
+    for (let k = 0; k < ops.length; k++) r = ops[k] === "+" ? r + nums[k + 1] : r - nums[k + 1];
+    return fromUnits(r, decimals);
+  } catch { return null; }
+}

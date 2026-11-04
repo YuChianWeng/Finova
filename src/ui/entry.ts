@@ -1,5 +1,12 @@
 /**
- * ＋ 記一筆／編輯表單（底部面板或桌面右側抽屜；/finance/new 為全頁版）。
+ * ＋ 記一筆／編輯表單（issue #10 版面）：
+ * - 手機全螢幕（頂部 ✕ 取消、標題、✓ 儲存），桌面右側抽屜；/finance/new 為全頁版，內部版面相同
+ * - 類型分頁：建議｜支出｜收入｜轉帳｜應收款項｜應付款項｜系統（後三者契約 v1.0 沒有，顯示「即將推出」）
+ * - 分類格：5 欄圓形圖示；支出先選主分類再選子分類（第一格「返回」）；收入直接顯示子分類，最後一格「＋新增」
+ * - 金額欄可輸入簡易算式（120+35），儲存前用十進位算出結果
+ * - 兩欄欄位按鈕：帳戶、專案、日期、時間、週期、標籤；點了開啟選擇器
+ *
+ * 契約行為照舊：
  * - 開表單時產生 idempotency_key，重送沿用同一把（契約 §1.5）
  * - 編輯、刪除帶 expected_version，衝突時顯示最新內容並提供「重新載入」（§1.6）
  * - 依 error.details 把錯誤顯示在欄位旁（§5）
@@ -8,35 +15,45 @@
  */
 import type * as L from "../types/ledger";
 import { $, esc, ic, session } from "../lib/dom";
-import { fmt, isPositiveAmount, MINUS, curInfo } from "../lib/money";
-import { today, addDays, nowTime, isoDateTime, splitDT, md, wd } from "../lib/dates";
+import { fmt, isPositiveAmount, curInfo, calc, hasOperator } from "../lib/money";
+import { today, addDays, nowTime, isoDateTime, splitDT, md, wd, monthOf, addMonths, daysInMonth } from "../lib/dates";
 import { app, getCatalog, findCat, mainCat, accOpt, catLabel } from "../state";
 import { api } from "../api/ledger";
 import { LedgerError, newIdempotencyKey, ERROR_TEXT } from "../api/client";
 import * as queue from "../api/offline";
 import { actions, reload, handleError, go } from "../app";
+import { back as routerBack } from "../router";
 import { amtHTML, catColor, catIconName, SOURCE_TEXT } from "./components";
-import { openSheet, setSheet, closeSheet, sheetShell, dialog, toast, sheet } from "./overlay";
+import { openSheet, setSheet, closeSheet, dialog, toast, sheet } from "./overlay";
 
 type Kind = "expense" | "income" | "transfer";
+type Tab = "suggest" | Kind | "receivable" | "payable" | "system";
+type Pick = "acc" | "to" | "proj" | "rec" | "tags";
+type Freq = "" | "daily" | "weekly" | "monthly" | "yearly";
 export type Entry = {
   mode: "new" | "edit" | "queue"; target: "sheet" | "page";
   id: number | null; version: number; key: string; qkey?: string;
   type: Kind; amt: string; amtIn: string; cur: string;
   cat: string | null; acc: string | null; to: string | null; fee: string;
   date: string; time: string; m: string; note: string; tags: string[]; proj: string;
+  /** 目前的分頁；支出分類格停在哪個主分類（null = 主分類層）；開著哪個選擇器；週期 */
+  tab: Tab; lvl: string | null; pick: Pick | null; rec: Freq;
   err: Record<string, string>; formErr: string | null; retryable: boolean; busy: boolean;
   hist?: L.TransactionDetail["history"]; orig?: L.Transaction; sugg: L.MerchantSuggestion[];
 };
 let E: Entry | null = null;
 export const entryState = () => E;
 const DRAFT = "finova-draft";
+const SOON: Tab[] = ["receivable", "payable", "system"];
+const TABS: [Tab, string][] = [["suggest", "建議"], ["expense", "支出"], ["income", "收入"], ["transfer", "轉帳"], ["receivable", "應收款項"], ["payable", "應付款項"], ["system", "系統"]];
+const FREQ_TEXT: Record<Freq, string> = { "": "單次", daily: "每天", weekly: "每週", monthly: "每月", yearly: "每年" };
 
 function blank(type: Kind = "expense"): Entry {
   const c = app.catalog!;
   const acc = c.frequent.accounts.find((k) => accOpt(k)?.can_record) ?? c.accounts.find((a) => a.can_record)?.account_key ?? null;
   return { mode: "new", target: "sheet", id: null, version: 0, key: newIdempotencyKey(), type, amt: "", amtIn: "", cur: accOpt(acc)?.currency ?? "TWD",
-    cat: type === "income" ? c.frequent.income_categories[0] ?? null : null, acc, to: null, fee: "", date: today(), time: nowTime(), m: "", note: "", tags: [], proj: "",
+    cat: null, acc, to: null, fee: "", date: today(), time: nowTime(), m: "", note: "", tags: [], proj: "",
+    tab: type, lvl: null, pick: null, rec: "",
     err: {}, formErr: null, retryable: false, busy: false, sugg: [] };
 }
 function fromTx(t: L.TransactionDetail | L.Transaction, copy = false): Entry {
@@ -44,8 +61,10 @@ function fromTx(t: L.TransactionDetail | L.Transaction, copy = false): Entry {
   const [from, to] = tr ? (t.transfer!.leg === "out" ? [t.account.account_key, t.transfer!.counterpart.account_key] : [t.transfer!.counterpart.account_key, t.account.account_key]) : [t.account.account_key, null];
   const amts = tr ? (t.transfer!.leg === "out" ? [t.amount.amount, t.transfer!.counterpart.amount.amount] : [t.transfer!.counterpart.amount.amount, t.amount.amount]) : [t.amount.amount, ""];
   const { date, time } = splitDT(t.occurred_at);
-  return { ...blank(), mode: copy ? "new" : "edit", id: copy ? null : t.id, version: t.version, type: tr ? "transfer" : (t.type === "income" ? "income" : "expense"),
-    amt: amts[0], amtIn: amts[1] !== amts[0] ? amts[1] : "", cur: t.amount.currency, cat: t.category ? (t.category.sub ?? t.category.main).category_key : null,
+  const type: Kind = tr ? "transfer" : (t.type === "income" ? "income" : "expense");
+  const cat = t.category ? (t.category.sub ?? t.category.main).category_key : null;
+  return { ...blank(), mode: copy ? "new" : "edit", id: copy ? null : t.id, version: t.version, type, tab: type, lvl: t.category?.sub ? t.category.main.category_key : null,
+    amt: amts[0], amtIn: amts[1] !== amts[0] ? amts[1] : "", cur: t.amount.currency, cat,
     acc: from, to, fee: t.transfer?.fee?.amount ?? "", date: copy ? today() : date, time: copy ? nowTime() : time, m: t.merchant ?? "", note: t.note ?? "",
     tags: t.tags.map((x) => x.tag_id), proj: t.project?.project_id ?? "", hist: copy ? undefined : (t as L.TransactionDetail).history, orig: copy ? undefined : t };
 }
@@ -56,95 +75,193 @@ export async function openEntry(o: { id?: number; copy?: boolean; type?: Kind; p
   if (o.id) {
     try { E = fromTx(await api.transaction(o.id), o.copy); }
     catch (e) { handleError(e); return; }
-  } else E = { ...blank(o.type), ...(o.prefill ?? {}) };
+  } else { E = { ...blank(o.type), ...(o.prefill ?? {}) }; if (o.prefill?.type) E.tab = o.prefill.type; }
   E.target = o.target ?? "sheet";
-  if (E.target === "sheet") { openSheet("entry", sheetEntry(), () => { E = null; }); focusAmount(); }
+  if (E.target === "sheet") { showSheet(); focusAmount(); }
 }
+const showSheet = () => openSheet("entry", entryHTML(), () => { E = null; }, { cls: "entry", returnFocus: "[data-a=add]" });
 export function openFromQueue(item: queue.QueueItem) {
   const b = item.body as any;
   const tr = "from_account_key" in b;
   const { date, time } = splitDT(b.occurred_at);
-  E = { ...blank(), mode: "queue", qkey: item.key, key: item.key, type: tr ? "transfer" : b.type, amt: tr ? b.amount_out : b.amount, amtIn: b.amount_in ?? "", cur: b.currency ?? "TWD",
+  const type: Kind = tr ? "transfer" : b.type;
+  E = { ...blank(), mode: "queue", qkey: item.key, key: item.key, type, tab: type, amt: tr ? b.amount_out : b.amount, amtIn: b.amount_in ?? "", cur: b.currency ?? "TWD",
     cat: b.category_key ?? null, acc: tr ? b.from_account_key : b.account_key, to: b.to_account_key ?? null, fee: b.fee?.amount ?? "", date, time, m: b.merchant ?? "", note: b.note ?? "",
     tags: b.tag_ids ?? [], proj: b.project_id ?? "", formErr: item.error ? `送出失敗：${item.error.message}` : null };
-  openSheet("entry", sheetEntry(), () => { E = null; });
+  E.lvl = mainCat(E.cat)?.category_key !== E.cat ? mainCat(E.cat)?.category_key ?? null : null;
+  showSheet();
 }
 export function restoreDraft(): boolean {
   const s = session.get(DRAFT); if (!s) return false;
   session.del(DRAFT);
-  try { E = { ...JSON.parse(s), busy: false, sugg: [] }; } catch { return false; }
-  openSheet("entry", sheetEntry(), () => { E = null; });
+  try { E = { ...blank(), ...JSON.parse(s), busy: false, sugg: [], pick: null }; } catch { return false; }
+  showSheet();
   toast("已還原登入前未送出的表單");
   return true;
 }
-function focusAmount() { setTimeout(() => { const a = $<HTMLInputElement>("#e-amt"); if (a && E?.mode !== "edit") a.focus({ preventScroll: true }); }, 300); }
+/** 桌面開表單時直接把游標放在金額；手機先選分類，選好再聚焦（避免鍵盤蓋住分類格） */
+function focusAmount(force = false) {
+  setTimeout(() => {
+    const a = $<HTMLInputElement>("#e-amt");
+    if (a && E?.mode !== "edit" && (force || matchMedia("(min-width: 960px)").matches)) a.focus({ preventScroll: !force });
+  }, force ? 30 : 300);
+}
 export function renderEntry() {
   if (!E) return;
-  if (E.target === "page") { const p = $("#entry-page"); if (p) p.innerHTML = entryPage(); }
-  else if (sheet.kind === "entry") setSheet(sheetEntry());
-  const a = $<HTMLInputElement>("#e-amt"); if (a) a.setAttribute("inputmode", matchMedia("(max-width: 959.98px)").matches ? "none" : "decimal");
+  if (E.target === "page") { const p = $("#entry-page"); if (p) p.innerHTML = entryHTML(); }
+  else if (sheet.kind === "entry") setSheet(entryHTML());
 }
 
 /* ------------------------------------------------------------ render */
 const errP = (k: string) => (E!.err[k] ? `<p class="err" id="err-${k}">${ic("alert", "s")}${esc(E!.err[k])}</p>` : "");
-function body(): string {
+const titleOf = () => (E!.mode === "edit" ? "編輯記錄" : E!.mode === "queue" ? "待同步的記錄" : "新增記錄");
+const isSoon = (t: Tab) => SOON.includes(t);
+
+/** 頂部：✕ 取消、標題、✓ 儲存 */
+function head(): string {
+  const e = E!, dis = e.busy || isSoon(e.tab) ? "disabled" : "";
+  return `<div class="eh"><button class="ibtn" data-a="e-close" aria-label="取消">${ic("x")}</button><h2 class="h2" id="sheet-title">${titleOf()}</h2><button class="ibtn eh-ok" data-a="e-save" aria-label="${e.busy ? "儲存中" : "儲存"}" ${dis}>${ic("check")}</button></div>`;
+}
+function tabs(): string {
+  const e = E!, trNow = e.type === "transfer";
+  return `<div class="etabs" role="tablist" aria-label="類型">${TABS.map(([k, l]) => {
+    // 編輯時不能在轉帳／非轉帳之間切換（契約：轉帳是兩筆一組）
+    const lock = e.mode === "edit" && (isSoon(k) || (k === "transfer") !== trNow || (k === "suggest" && trNow));
+    return `<button role="tab" data-a="e-tab" data-v="${k}" aria-selected="${e.tab === k}" ${lock ? "disabled" : ""}>${l}${isSoon(k) ? '<span class="soon-dot" aria-hidden="true"></span>' : ""}</button>`;
+  }).join("")}</div>`;
+}
+
+/* ---------- 分類格 */
+const cell = (o: { a: string; v: string; name: string; icon: string; color: string; on: boolean; sub?: string; cls?: string; label?: string }) =>
+  `<button class="cg ${o.cls ?? ""}" data-a="${o.a}" data-v="${esc(o.v)}" aria-pressed="${o.on}" ${o.label ? `aria-label="${esc(o.label)}"` : ""}><span class="cg-ic" style="--cc:${o.color}">${ic(o.icon)}</span><span class="cg-n">${esc(o.name)}</span>${o.sub ? `<span class="cg-s">${o.sub}</span>` : ""}</button>`;
+/** 圖示：分類自己的 icon → 主分類的 icon → 「?」 */
+const iconOf = (key: string, icon: string | null | undefined) => icon ?? (mainCat(key)?.icon ?? null) ?? "q";
+function catGrid(): string {
+  const e = E!, c = app.catalog!;
+  if (e.tab === "suggest") {
+    const keys = [...c.frequent.expense_categories, ...c.frequent.income_categories].filter((k) => { const f = findCat(k); return f && !f.is_hidden; });
+    if (!keys.length) return `<p class="sm mu" style="margin:8px 0">還沒有常用分類，記幾筆之後會出現在這裡。</p>`;
+    return `<div class="cgrid" role="group" aria-label="建議分類">${keys.map((k) => { const f = findCat(k)!; return cell({ a: "e-cat", v: k, name: f.name, icon: catIconName(k, iconOf(k, f.icon)), color: catColor(k, f.icon), on: e.cat === k, sub: f.kind === "income" ? "收入" : "支出", label: `${f.kind === "income" ? "收入" : "支出"}：${catLabel(k)}` }); }).join("")}</div>`;
+  }
+  if (e.tab === "expense") {
+    const lvl = e.lvl ? c.categories.find((m) => m.category_key === e.lvl) : null;
+    if (lvl) {
+      const kids = lvl.children.filter((x) => !x.is_hidden);
+      return `<div class="cgrid" role="group" aria-label="${esc(lvl.name)} 子分類">${cell({ a: "e-lvl", v: "", name: "返回", icon: catIconName(lvl.category_key, iconOf(lvl.category_key, lvl.icon)), color: catColor(lvl.category_key, lvl.icon), on: false, cls: "back", label: `返回主分類（目前：${lvl.name}）` })}${kids.map((s) => cell({ a: "e-cat", v: s.category_key, name: s.name, icon: catIconName(s.category_key, iconOf(s.category_key, s.icon)), color: catColor(lvl.category_key, lvl.icon), on: e.cat === s.category_key })).join("")}</div>
+        <p class="xs mu cg-hint">${e.cat === lvl.category_key ? `已選「${esc(lvl.name)}」；也可以再選子分類` : `不選子分類也可以，按「返回」只記主分類`}</p>`;
+    }
+    const mains = c.categories.filter((m) => m.kind === "expense" && !m.is_hidden);
+    return `<div class="cgrid" role="group" aria-label="支出主分類">${mains.map((m) => cell({ a: "e-main", v: m.category_key, name: m.name, icon: catIconName(m.category_key, iconOf(m.category_key, m.icon)), color: catColor(m.category_key, m.icon), on: mainCat(e.cat)?.category_key === m.category_key && findCat(e.cat)?.kind === "expense" })).join("")}</div>`;
+  }
+  // 收入：直接列子分類（沒有子分類的主分類列它自己），最後一格「＋新增」
+  const items = c.categories.filter((m) => m.kind === "income" && !m.is_hidden).flatMap((m) => { const kids = m.children.filter((x) => !x.is_hidden); return kids.length ? kids.map((k) => ({ k: k.category_key, n: k.name, icon: k.icon, main: m })) : [{ k: m.category_key, n: m.name, icon: m.icon, main: m }]; });
+  return `<div class="cgrid" role="group" aria-label="收入分類">${items.map((x) => cell({ a: "e-cat", v: x.k, name: x.n, icon: catIconName(x.k, iconOf(x.k, x.icon ?? x.main.icon)), color: catColor(x.main.category_key, x.main.icon), on: e.cat === x.k })).join("")}<button class="cg add" data-a="e-newcat"><span class="cg-ic">${ic("plus")}</span><span class="cg-n">新增</span></button></div>`;
+}
+function soonPanel(t: Tab): string {
+  if (t === "system") return `<div class="soon">${ic("scale")}<div><b>系統（餘額調整）</b><p class="sm mu">餘額調整請從對帳建立：輸入實際餘額，App 會算出差額並記成「餘額調整」（不計入收支）。</p><button class="btn sm" data-a="e-go-rec">前往對帳</button></div></div>`;
+  const n = t === "receivable" ? "應收款項" : "應付款項";
+  return `<div class="soon">${ic("clock")}<div><b>${n} · 即將推出</b><p class="sm mu">${n}需要新版記帳格式（契約 v1.1）與後端支援，目前還不能從這裡記錄。${t === "receivable" ? "借錢給別人，暫時可以記成「轉帳」到應收帳戶。" : ""}</p></div></div>`;
+}
+
+/* ---------- 金額與名稱 */
+function amountBlock(): string {
   const e = E!, c = app.catalog!, tr = e.type === "transfer";
-  const sign = tr ? "⇄" : e.type === "income" ? "+" : MINUS;
-  const typeSeg = `<div class="seg full" role="group" aria-label="類型">${([["expense", MINUS + " 支出"], ["income", "+ 收入"], ["transfer", "⇄ 轉帳"]] as const).map(([k, l]) => `<button data-a="e-type" data-v="${k}" aria-pressed="${e.type === k}" ${e.mode === "edit" && (k === "transfer") !== tr ? "disabled" : ""}>${l}</button>`).join("")}</div>`;
   const fromAcc = accOpt(e.acc), toAcc = accOpt(e.to);
   const cross = tr && fromAcc && toAcc && fromAcc.currency !== toAcc.currency;
   const cur = tr ? fromAcc?.currency ?? "TWD" : e.cur;
-  const amount = `<div class="fld"><label class="eyebrow" for="e-amt">${cross ? "轉出金額" : "金額"}</label><div class="amt-box ${e.err.amt ? "bad" : ""}"><span class="cur">${esc(curInfo(cur).symbol)}</span><span class="sg" aria-hidden="true">${sign}</span><input id="e-amt" class="amt-in" inputmode="decimal" placeholder="0" value="${esc(e.amt)}" autocomplete="off" ${e.err.amt ? 'aria-invalid="true" aria-describedby="err-amt"' : ""}></div>${errP("amt")}</div>
-    ${cross ? `<div class="fld"><label class="eyebrow" for="e-amtin">轉入金額（${esc(toAcc!.currency)}）</label><div class="amt-box ${e.err.amtIn ? "bad" : ""}"><span class="cur">${esc(curInfo(toAcc!.currency).symbol)}</span><input id="e-amtin" class="amt-in" inputmode="decimal" placeholder="0" value="${esc(e.amtIn)}" autocomplete="off"></div>${errP("amtIn")}</div>` : ""}
-    <div class="keypad only-m" aria-label="數字鍵盤">${["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "del"].map((k) => `<button data-a="kp" data-k="${k}" ${k === "del" ? 'aria-label="刪除一位"' : ""}>${k === "del" ? ic("chev-l") : k}</button>`).join("")}</div>`;
-  let cat = "";
-  if (!tr) {
-    const kind = e.type;
-    const mains = c.categories.filter((m) => m.kind === kind && !m.is_hidden);
-    const freq = (kind === "income" ? c.frequent.income_categories : c.frequent.expense_categories).filter((k) => findCat(k)).slice(0, 8);
-    const sel = findCat(e.cat), main = mainCat(e.cat);
-    cat = `${freq.length ? `<div class="fld"><span class="eyebrow">常用</span><div class="chips-scroll">${freq.map((k) => { const f = findCat(k)!; return `<button class="chip" data-a="e-cat" data-v="${k}" aria-pressed="${e.cat === k}">${ic(catIconName(k), "s")}${esc(f.name)}</button>`; }).join("")}</div></div>` : ""}
-    <div class="fld"><span class="eyebrow" id="lbl-cat">分類 ${sel ? `· <span style="color:var(--tx)">${esc(catLabel(e.cat))}</span>` : ""}</span>
-      <div class="catgrid" role="group" aria-labelledby="lbl-cat">${mains.map((m) => `<button class="catbtn" data-a="e-cat" data-v="${m.category_key}" aria-pressed="${main?.category_key === m.category_key}"><span style="color:${catColor(m.category_key, m.icon)}">${ic(catIconName(m.category_key, m.icon))}</span>${esc(m.name)}</button>`).join("")}</div>
-      ${main && main.children.filter((x) => !x.is_hidden).length ? `<div class="wrap-row" style="margin-top:4px">${main.children.filter((x) => !x.is_hidden).map((s) => `<button class="chip" data-a="e-cat" data-v="${s.category_key}" aria-pressed="${e.cat === s.category_key}">${ic("check", "s ck-i")}${esc(s.name)}</button>`).join("")}</div><p class="xs mu" style="margin:0">不選子分類也可以，只記主分類。</p>` : ""}
-      ${errP("cat")}</div>`;
+  const curChip = tr ? `<span class="cur-chip static" title="轉出帳戶的幣別">${esc(cur)}</span>`
+    : `<label class="vh" for="e-cur">幣別</label><select id="e-cur" class="cur-chip">${c.currencies.map((x) => `<option value="${x.code}" ${e.cur === x.code ? "selected" : ""}>${esc(x.code)}</option>`).join("")}</select>`;
+  const dec = curInfo(cur).decimals;
+  const preview = hasOperator(e.amt) ? (() => { const v = calc(e.amt, dec); return `<p class="calc-hint ${v === null ? "bad" : ""}" aria-live="polite">${v === null ? "算式不完整" : "= " + esc(fmt(v, cur))}</p>`; })() : "";
+  const amt = `<div class="arow ${e.err.amt ? "bad" : ""}">${curChip}<label class="vh" for="e-amt">${cross ? "轉出金額" : "金額"}</label><input id="e-amt" class="amt-in" inputmode="decimal" enterkeyhint="done" placeholder="0" value="${esc(e.amt)}" autocomplete="off" ${e.err.amt ? 'aria-invalid="true" aria-describedby="err-amt"' : ""}><button class="ibtn calc-btn" data-a="e-plus" aria-label="加（輸入算式，例如 120+35）">${ic("plus")}</button></div>${preview}${errP("amt")}`;
+  const amtIn = cross ? `<div class="arow ${e.err.amtIn ? "bad" : ""}"><span class="cur-chip static">${esc(toAcc!.currency)}</span><label class="vh" for="e-amtin">轉入金額（${esc(toAcc!.currency)}）</label><input id="e-amtin" class="amt-in sm" inputmode="decimal" placeholder="轉入金額" value="${esc(e.amtIn)}" autocomplete="off"></div>${errP("amtIn")}` : "";
+  const suggest = e.sugg.length ? `<div class="sugg" role="listbox" aria-label="名稱建議">${e.sugg.map((s, i) => `<button data-a="sug" data-i="${i}" role="option"><span>${esc(s.merchant)}</span><span class="xs mu">${esc(s.last_category_key ? catLabel(s.last_category_key) : "")}${s.last_account_key ? " · " + esc(accOpt(s.last_account_key)?.name ?? "") : ""} · ${s.use_count} 次</span></button>`).join("")}</div>` : "";
+  const name = tr ? "" : `<div class="nrow ${e.err.m ? "bad" : ""}">${ic("receipt", "s")}<label class="vh" for="e-m">名稱</label><input id="e-m" placeholder="名稱" value="${esc(e.m)}" autocomplete="off" maxlength="200"><button class="ibtn bare" data-a="e-star" aria-label="加入常用範本（即將推出）">${ic("star", "s")}</button></div><div id="sugg">${suggest}</div>${errP("m")}`;
+  return `<div class="amtblk"><button class="photo" data-a="e-photo" aria-label="收據照片（即將推出）" aria-disabled="true">${ic("camera")}<span>即將推出</span></button><div class="amtcol">${amt}${amtIn}${name}</div></div>`;
+}
+
+/* ---------- 兩欄欄位按鈕 */
+const fbtn = (a: string, v: string, label: string, value: string | null, placeholder: string, err?: string) =>
+  `<button class="fbtn ${value ? "" : "empty"} ${err ? "bad" : ""}" data-a="${a}" data-v="${v}" aria-label="${esc(label)}：${esc(value ?? placeholder)}"><span class="fl">${esc(label)}</span><span class="fv">${esc(value ?? placeholder)}</span>${ic("chev-r", "s")}</button>`;
+function dateLabel(d: string) { const t = today(); return `${d === t ? "今天" : d === addDays(t, -1) ? "昨天" : d === addDays(t, 1) ? "明天" : md(d)}（週${wd(d)}）`; }
+function fields(): string {
+  const e = E!, c = app.catalog!, tr = e.type === "transfer";
+  const dateBtn = `<label class="fbtn ${e.err.date ? "bad" : ""}"><span class="fl">日期</span><span class="fv">${e.date ? dateLabel(e.date) : "選擇日期"}</span><input id="e-d" class="fbtn-in" type="date" value="${e.date}" aria-label="日期"></label>`;
+  const timeBtn = `<label class="fbtn"><span class="fl">時間</span><span class="fv num">${esc(e.time || "--:--")}</span><input id="e-t" class="fbtn-in" type="time" value="${e.time}" aria-label="時間"></label>`;
+  if (tr) {
+    const toAcc = accOpt(e.to);
+    return `<div class="fgrid">${fbtn("e-pick", "acc", "轉出帳戶", accOpt(e.acc)?.name ?? null, "選擇帳戶", e.err.acc)}${fbtn("e-pick", "to", toAcc?.group === "credit_card" ? "轉入（繳卡費）" : "轉入帳戶", toAcc?.name ?? null, "選擇帳戶", e.err.to)}${dateBtn}${timeBtn}
+      ${e.mode === "edit" ? "" : `<label class="fbtn ${e.err.fee ? "bad" : ""} ${e.fee ? "" : "empty"}"><span class="fl">手續費（選填）</span><input id="e-fee" class="fv-in num" inputmode="decimal" placeholder="0" value="${esc(e.fee)}"></label>`}</div>
+      ${errP("acc")}${errP("to")}${errP("fee")}${errP("date")}
+      <p class="xs mu" style="margin:0">轉入信用卡會自動記成「繳卡費」；手續費記成 個人 › 手續費。</p>`;
   }
-  const accs = c.accounts.filter((a) => a.can_record);
-  const accChips = (key: "acc" | "to", label: string) => `<div class="fld"><span class="eyebrow">${label}</span><div class="chips-scroll">${accs.map((a) => `<button class="chip" data-a="e-acc" data-k="${key}" data-v="${a.account_key}" aria-pressed="${e[key] === a.account_key}">${ic(a.icon ?? "wallet", "s")}${esc(a.name)}${a.currency !== "TWD" ? ` <span class="xs mu">${a.currency}</span>` : ""}</button>`).join("")}</div>${errP(key)}</div>`;
-  const accPart = tr
-    ? accChips("acc", "轉出帳戶") + `<div style="text-align:center;color:var(--mu)">${ic("chev-d")}</div>` + accChips("to", toAcc?.group === "credit_card" ? "轉入帳戶 · 會記成「繳卡費」" : "轉入帳戶（繳信用卡費 = 轉入信用卡）") +
-      (e.mode === "edit" ? "" : `<div class="fld"><label class="eyebrow" for="e-fee">手續費（選填，記成 個人 › 手續費）</label><input id="e-fee" class="in num" inputmode="decimal" placeholder="0" value="${esc(e.fee)}">${errP("fee")}</div>`)
-    : accChips("acc", "帳戶");
-  const t0 = today(), y0 = addDays(t0, -1);
-  const date = `<div class="fld"><span class="eyebrow">日期時間</span><div class="row" style="flex-wrap:wrap"><button class="chip" data-a="e-date" data-v="${t0}" aria-pressed="${e.date === t0}">今天</button><button class="chip" data-a="e-date" data-v="${y0}" aria-pressed="${e.date === y0}">昨天</button><label for="e-d" class="vh">日期</label><input id="e-d" class="in" type="date" value="${e.date}" style="width:auto;flex:1;min-width:140px"><label for="e-t" class="vh">時間</label><input id="e-t" class="in" type="time" value="${e.time}" style="width:110px"></div>${errP("date")}</div>`;
-  const suggest = e.sugg.length ? `<div class="sugg" style="margin-top:6px" role="listbox" aria-label="商家建議">${e.sugg.map((s, i) => `<button data-a="sug" data-i="${i}" role="option"><span>${esc(s.merchant)}</span><span class="xs mu">${esc(s.last_category_key ? catLabel(s.last_category_key) : "")}${s.last_account_key ? " · " + esc(accOpt(s.last_account_key)?.name ?? "") : ""} · ${s.use_count} 次</span></button>`).join("")}</div>` : "";
-  const more = `${tr ? "" : `<div class="fld" style="position:relative"><label class="eyebrow" for="e-m">商家／項目</label><input id="e-m" class="in" placeholder="例：學餐、全聯" value="${esc(e.m)}" autocomplete="off" maxlength="200"><div id="sugg">${suggest}</div>${errP("m")}</div>`}
-    <div class="fld"><label class="eyebrow" for="e-note">備註</label><input id="e-note" class="in" value="${esc(e.note)}" placeholder="選填" maxlength="200">${errP("note")}</div>
-    ${tr ? "" : `<div class="fld"><span class="eyebrow">標籤（最多 10 個）</span><div class="wrap-row">${c.tags.map((t) => `<button class="chip" data-a="e-tag" data-v="${t.tag_id}" aria-pressed="${e.tags.includes(t.tag_id)}">#${esc(t.name)}</button>`).join("")}</div>${errP("tags")}</div>
-    <div class="two"><div class="fld"><label class="eyebrow" for="e-proj">專案</label><select id="e-proj" class="in"><option value="">無</option>${c.projects_active.map((p) => `<option value="${p.project_id}" ${e.proj === p.project_id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
-    <div class="fld"><label class="eyebrow" for="e-cur">幣別</label><select id="e-cur" class="in">${c.currencies.map((x) => `<option value="${x.code}" ${e.cur === x.code ? "selected" : ""}>${esc(x.name)} ${esc(x.symbol)}</option>`).join("")}</select></div></div>`}`;
+  const proj = c.projects_active.find((p) => p.project_id === e.proj)?.name ?? null;
+  const tags = e.tags.map((id) => c.tags.find((t) => t.tag_id === id)?.name).filter(Boolean).map((n) => "#" + n).join(" ");
+  const recBtn = e.mode === "new" ? fbtn("e-pick", "rec", "週期", e.rec ? recText(e.rec, e.date) : null, "單次", e.err.rec) : `<div class="fbtn empty" aria-disabled="true"><span class="fl">週期</span><span class="fv">單次</span></div>`;
+  return `<div class="fgrid">${fbtn("e-pick", "acc", "帳戶", accOpt(e.acc)?.name ?? null, "選擇帳戶", e.err.acc)}${fbtn("e-pick", "proj", "專案", proj, "無專案", e.err.proj)}${dateBtn}${timeBtn}${recBtn}${fbtn("e-pick", "tags", "標籤", tags || null, "#標籤", e.err.tags)}</div>
+    ${errP("acc")}${errP("proj")}${errP("date")}${errP("rec")}${errP("tags")}`;
+}
+function recText(f: Freq, d: string) {
+  if (f === "weekly") return `每週${wd(d)}`;
+  if (f === "monthly") return `每月 ${+d.slice(8)} 日`;
+  if (f === "yearly") return `每年 ${md(d)}`;
+  return FREQ_TEXT[f];
+}
+
+/* ---------- 選擇器（在表單內切換，不另開面板） */
+function picker(): string {
+  const e = E!, c = app.catalog!, p = e.pick!;
+  const row = (a: string, v: string, label: string, on: boolean, sub = "", icon = "") => `<button class="opt-row" data-a="${a}" data-v="${esc(v)}" aria-pressed="${on}">${icon ? ic(icon, "s") : ""}<span class="grow">${label}${sub ? `<span class="xs mu"> ${sub}</span>` : ""}</span>${on ? ic("check", "s") : ""}</button>`;
+  let title = "", list = "";
+  if (p === "acc" || p === "to") {
+    title = p === "to" ? "轉入帳戶" : e.type === "transfer" ? "轉出帳戶" : "帳戶";
+    list = c.accounts.filter((a) => a.can_record).map((a) => row("e-set", a.account_key, esc(a.name), e[p] === a.account_key, a.currency !== "TWD" ? a.currency : "", a.icon ?? "wallet")).join("");
+  } else if (p === "proj") {
+    title = "專案";
+    list = row("e-set", "", "無專案", !e.proj) + c.projects_active.map((x) => row("e-set", x.project_id, esc(x.name), e.proj === x.project_id, `${md(x.start_date)}–${md(x.end_date)}`, "plane")).join("");
+  } else if (p === "rec") {
+    title = "週期";
+    const off = !app.online ? `<p class="callout warn sm" style="margin:0 0 8px">${ic("alert", "s")}離線時不能設定週期，連線後再設定。</p>` : "";
+    list = off + (["", "daily", "weekly", "monthly", "yearly"] as Freq[]).map((f) => row("e-set", f, f ? recText(f, e.date) : "單次", e.rec === f, f ? "從下一期開始自動提醒入帳" : "")).join("");
+  } else {
+    title = "標籤（最多 10 個）";
+    list = c.tags.length ? c.tags.map((t) => row("e-set", t.tag_id, "#" + esc(t.name), e.tags.includes(t.tag_id))).join("") : `<p class="sm mu">還沒有標籤，可以在 設定 › 標籤 新增。</p>`;
+  }
+  return `<div class="pick"><div class="pick-h"><button class="btn sm g" data-a="e-pick-back">${ic("chev-l", "s")}返回</button><b>${title}</b>${p === "tags" ? `<button class="btn sm p" data-a="e-pick-back">完成</button>` : "<span></span>"}</div><div class="pick-l" role="group" aria-label="${esc(title)}">${list}</div></div>`;
+}
+
+function bodyHTML(): string {
+  const e = E!;
+  const formErr = e.formErr ? `<div class="callout warn" role="alert">${ic("alert")}<div>${esc(e.formErr)}${e.retryable ? ` <button class="link" data-a="e-save">重試</button>` : ""}</div></div>` : "";
+  if (e.pick) return formErr + picker();
+  if (isSoon(e.tab)) return formErr + tabs() + soonPanel(e.tab);
+  const cat = e.type === "transfer" ? "" : `<div class="fld">${catGrid()}${errP("cat")}</div>`;
+  const note = `<div class="fld"><label class="vh" for="e-note">備註</label><textarea id="e-note" class="in note-in" rows="2" maxlength="200" placeholder="備註">${esc(e.note)}</textarea>${errP("note")}</div>`;
+  const dis = e.busy ? "disabled" : "";
+  const actionsRow = e.mode === "edit"
+    ? `<div class="row e-more"><button class="btn dg-t" data-a="askdel" data-id="${e.id}" ${dis}>${ic("trash", "s")}刪除</button><button class="btn" data-a="e-copy" ${dis}>${ic("copy", "s")}複製成新的一筆</button></div>`
+    : e.mode === "queue" ? `<div class="row e-more"><button class="btn dg-t" data-a="queue-drop">${ic("trash", "s")}捨棄這筆待同步紀錄</button></div>`
+    : `<button class="btn wide" data-a="e-save" data-again="1" ${dis}>${ic("plus", "s")}儲存並再記一筆</button>`;
   const hist = e.mode === "edit" && e.hist ? `<div class="fld"><span class="eyebrow">修改紀錄</span><div class="hist">${e.hist.slice().reverse().map((h) => { const s = splitDT(h.at); return `<div><span class="num">${md(s.date)} ${s.time}</span> · <span class="src">${esc(h.actor)}</span><br><span class="mu">${({ create: "建立", update: "修改", delete: "刪除", restore: "還原", migrate: "從 MOZE 匯入" } as const)[h.action]}${h.changed_fields.length ? "：" + h.changed_fields.map((f) => FIELD_TEXT[f] ?? f).join("、") : ""}</span></div>`; }).join("")}</div></div>` : "";
   const info = e.mode === "edit" && e.orig ? `<p class="xs mu" style="margin:0">來源：${SOURCE_TEXT[e.orig.source]} · 版本 ${e.version}</p>` : "";
-  const formErr = e.formErr ? `<div class="callout warn" role="alert">${ic("alert")}<div>${esc(e.formErr)}${e.retryable ? ` <button class="link" data-a="e-save">重試</button>` : ""}</div></div>` : "";
-  return formErr + typeSeg + amount + cat + accPart + date + more + info + hist;
+  return formErr + tabs() + cat + amountBlock() + fields() + note + actionsRow + info + hist;
 }
-const FIELD_TEXT: Record<string, string> = { amount: "金額", account: "帳戶", category: "分類", merchant: "商家", note: "備註", tags: "標籤", project: "專案", occurred_at: "時間", type: "類型", currency: "幣別" };
-function foot(): string {
-  const e = E!, dis = e.busy ? "disabled" : "";
-  if (e.mode === "edit") return `<button class="btn dg-t" data-a="askdel" data-id="${e.id}" style="flex:0 0 auto" ${dis}>${ic("trash", "s")}刪除</button><button class="btn" data-a="e-copy" style="flex:0 0 auto" ${dis}>${ic("copy", "s")}複製</button><button class="btn p" data-a="e-save" ${dis}>${e.busy ? "儲存中…" : ic("check", "s") + "儲存修改"}</button>`;
-  if (e.mode === "queue") return `<button class="btn dg-t" data-a="queue-drop" style="flex:0 0 auto">${ic("trash", "s")}捨棄</button><button class="btn p" data-a="e-save" ${dis}>${ic("check", "s")}修正後送出</button>`;
-  return `<button class="btn" data-a="e-save" data-again="1" ${dis}>再記一筆</button><button class="btn p" data-a="e-save" ${dis}>${e.busy ? "儲存中…" : ic("check", "s") + "儲存"}</button>`;
-}
-const titleOf = () => (E!.mode === "edit" ? "編輯紀錄" : E!.mode === "queue" ? "待同步的紀錄" : "記一筆");
-export const sheetEntry = () => sheetShell(titleOf(), body(), foot());
-export const entryPage = () => `<div class="ch"><h2 class="h2">${titleOf()}</h2></div><div class="stack" style="gap:16px">${body()}</div><div class="sheet-f" style="position:static;margin-top:16px;padding:0;border:0;background:none">${foot()}</div>`;
+const FIELD_TEXT: Record<string, string> = { amount: "金額", account: "帳戶", category: "分類", merchant: "名稱", note: "備註", tags: "標籤", project: "專案", occurred_at: "時間", type: "類型", currency: "幣別" };
+/** 面板與 /finance/new 共用：頂部列＋可捲動內容 */
+export const entryHTML = () => `${head()}<div class="sheet-b entry-b">${bodyHTML()}</div>`;
+/** 舊名稱（/finance/new 用 renderEntry 畫進 #entry-page） */
+export const sheetEntry = entryHTML;
 
 /* ------------------------------------------------------------ validate & build */
 function validate(): boolean {
   const e = E!, err: Record<string, string> = {}, tr = e.type === "transfer";
   const from = accOpt(e.acc), to = accOpt(e.to);
   const dec = curInfo(tr ? from?.currency ?? "TWD" : e.cur).decimals;
-  if (!isPositiveAmount(e.amt, dec)) err.amt = e.amt && Number(e.amt) > 0 ? `${curInfo(tr ? from?.currency ?? "TWD" : e.cur).code} 最多 ${dec} 位小數` : "請輸入金額（大於 0）";
+  if (isSoon(e.tab)) { e.formErr = "這個類型即將推出，目前還不能記錄"; e.err = err; return false; }
+  // 簡易計算機：有算式時先算出結果（十進位運算），再照一般規則驗證
+  if (hasOperator(e.amt)) { const v = calc(e.amt, dec); if (v === null) err.amt = "算式不完整，請檢查"; else e.amt = v; }
+  if (err.amt) { /* 已有錯誤 */ }
+  else if (!isPositiveAmount(e.amt, dec)) err.amt = e.amt && Number(e.amt) > 0 ? `${curInfo(tr ? from?.currency ?? "TWD" : e.cur).code} 最多 ${dec} 位小數` : "請輸入金額（大於 0）";
   if (!e.acc) err.acc = tr ? "請選擇轉出帳戶" : "請選擇帳戶";
   if (tr) {
     if (!e.to) err.to = "請選擇轉入帳戶";
@@ -157,6 +274,7 @@ function validate(): boolean {
     else if (c.kind !== e.type) err.cat = e.type === "expense" ? "支出不能選收入分類" : "收入不能選支出分類";
   }
   if (!e.date) err.date = "請選擇日期";
+  if (e.rec && !tr && e.mode === "new" && !app.online) err.rec = "離線時不能設定週期，請連線後再設定，或改成單次";
   if (e.tags.length > 10) err.tags = "最多 10 個標籤";
   e.err = err;
   return !Object.keys(err).length;
@@ -177,7 +295,7 @@ const FIELD_MAP: Record<string, string> = { amount: "amt", amount_out: "amt", am
 export async function saveEntry(again = false) {
   const e = E!; if (e.busy) return;
   e.formErr = null; e.retryable = false;
-  if (!validate()) { renderEntry(); $(".sheet .err, #entry-page .err")?.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
+  if (!validate()) { renderEntry(); $(".sheet .err, .sheet .callout, #entry-page .err, #entry-page .callout")?.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
   const tr = e.type === "transfer";
   const label = tr ? (accOpt(e.to)?.group === "credit_card" ? "繳卡費" : "轉帳") : e.m || findCat(e.cat)?.name || "";
   const shown = fmt(e.amt, tr ? accOpt(e.acc)?.currency ?? "TWD" : e.cur);
@@ -213,9 +331,15 @@ export async function saveEntry(again = false) {
       toast(`${res.status === "duplicate" ? "這筆先前已送出" : "已記錄"} ${esc(label)} ${shown}`, () => undoCreate(res.legs[0]));
       return finish(again);
     } else {
-      const res = await api.createTransaction(txBody());
+      const body = txBody();
+      const res = await api.createTransaction(body);
       if (e.mode === "queue") await queue.remove(e.qkey!);
-      toast(`${res.status === "duplicate" ? "這筆先前已送出" : "已記錄"} ${esc(label)} ${shown}`, () => undoCreate(res.transaction));
+      let ruleMsg = "";
+      if (e.rec && e.mode === "new" && res.status !== "duplicate") {
+        try { await createRule(e, body); ruleMsg = `，並設定${recText(e.rec, e.date)}週期`; }
+        catch (err) { ruleMsg = "（週期規則建立失敗，可到 設定 › 週期交易 重新設定）"; console.warn(err); }
+      }
+      toast(`${res.status === "duplicate" ? "這筆先前已送出" : "已記錄"} ${esc(label)} ${shown}${ruleMsg}`, () => undoCreate(res.transaction));
       return finish(again);
     }
     reload();
@@ -229,7 +353,7 @@ async function undoCreate(t: L.Transaction) {
 }
 function finish(again: boolean) {
   const e = E!;
-  if (again) { E = { ...blank(e.type), acc: e.acc, date: e.date, cur: e.cur, to: e.type === "transfer" ? e.to : null }; renderEntry(); setTimeout(() => $<HTMLInputElement>("#e-amt")?.focus(), 50); }
+  if (again) { E = { ...blank(e.type), target: e.target, tab: e.tab, acc: e.acc, date: e.date, cur: e.cur, to: e.type === "transfer" ? e.to : null }; renderEntry(); }
   else if (e.target === "page") { E = null; go("/transactions"); }
   else { closeSheet(); E = null; }
   reload();
@@ -299,8 +423,40 @@ export async function askDelete(id: number) {
   }, { danger: true });
 }
 
+/* ------------------------------------------------------------ 週期（選了週期，儲存後用 POST /recurring 建立規則） */
+function nextStart(f: Freq, d: string): string {
+  if (f === "daily") return addDays(d, 1);
+  if (f === "weekly") return addDays(d, 7);
+  const day = +d.slice(8);
+  const m = f === "monthly" ? addMonths(monthOf(d), 1) : `${+d.slice(0, 4) + 1}-${d.slice(5, 7)}`;
+  return `${m}-${String(Math.min(day, daysInMonth(m))).padStart(2, "0")}`;
+}
+async function createRule(e: Entry, body: L.CreateTransactionRequest) {
+  const { idempotency_key, occurred_at, ...template } = body; void idempotency_key; void occurred_at;
+  const f = e.rec as Exclude<Freq, "">;
+  const isLast = +e.date.slice(8) === daysInMonth(monthOf(e.date));
+  await api.createRecurring({
+    name: e.m.trim() || findCat(e.cat)?.name || "週期交易", template: template as L.CreateTransactionRequest,
+    freq: f, interval: 1, by_weekday: f === "weekly" ? ((new Date(e.date + "T12:00:00Z").getUTCDay() + 6) % 7) + 1 : null,
+    by_monthday: f === "monthly" ? (isLast ? 31 : +e.date.slice(8)) : null, time_local: `${e.time || "12:00"}:00`,
+    start_date: nextStart(f, e.date), end_date: null, mode: "confirm", is_active: true,
+  });
+}
+
 /* ------------------------------------------------------------ actions & inputs */
 let sugT: ReturnType<typeof setTimeout> | undefined;
+function closeEntry() {
+  const e = E; if (!e) return;
+  if (e.target === "page") { E = null; routerBack("/accounts"); } else closeSheet();
+}
+function pickCat(key: string) {
+  const e = E!; const f = findCat(key); if (!f) return;
+  const k = f.kind === "income" ? "income" : "expense";
+  e.cat = key; e.type = k; delete e.err.cat;
+  if (e.tab !== "suggest") e.tab = k;
+  renderEntry();
+  if (!e.amt) focusAmount(true); // 選好分類 → 直接輸入金額（最少 3 次點擊：分類 → 金額 → ✓）
+}
 actions({
   add() { openEntry(); },
   edit(el) {
@@ -309,42 +465,92 @@ actions({
     openEntry({ id: Number(el.dataset.id) });
   },
   askdel(el) { askDelete(Number(el.dataset.id)); },
-  "e-type"(el) {
-    const e = E!; const v = el.dataset.v as Kind; if (e.type === v) return;
-    e.type = v; e.err = {};
-    if (findCat(e.cat)?.kind !== v) e.cat = v === "income" ? app.catalog!.frequent.income_categories[0] ?? null : null;
+  "e-close"() { closeEntry(); },
+  "e-tab"(el) {
+    const e = E!; const v = el.dataset.v as Tab; if (e.tab === v) return;
+    e.tab = v; e.err = {}; e.formErr = null; e.pick = null;
+    if (v === "expense" || v === "income" || v === "transfer") {
+      e.type = v;
+      if (v !== "transfer" && findCat(e.cat)?.kind !== v) { e.cat = null; e.lvl = null; }
+      if (v === "expense") e.lvl = mainCat(e.cat) && mainCat(e.cat)!.category_key !== e.cat ? mainCat(e.cat)!.category_key : null;
+    }
     renderEntry();
   },
-  kp(el) {
-    const e = E!; const k = el.dataset.k!; let v = e.amt;
-    if (k === "del") v = v.slice(0, -1); else if (k === ".") { if (!v.includes(".")) v = (v || "0") + "."; } else if (v.length < 12) v = (v === "0" ? "" : v) + k;
-    e.amt = v; const i = $<HTMLInputElement>("#e-amt"); if (i) i.value = v;
-    if (e.err.amt && Number(v) > 0) { delete e.err.amt; renderEntry(); }
+  "e-main"(el) {
+    const e = E!; const m = app.catalog!.categories.find((x) => x.category_key === el.dataset.v); if (!m) return;
+    if (m.children.some((x) => !x.is_hidden)) { e.lvl = m.category_key; e.cat = m.category_key; e.type = "expense"; delete e.err.cat; renderEntry(); $<HTMLElement>("#sheet .cgrid .cg.back, #entry-page .cgrid .cg.back")?.focus(); }
+    else pickCat(m.category_key);
   },
-  "e-cat"(el) { const e = E!; e.cat = el.dataset.v!; delete e.err.cat; renderEntry(); },
-  "e-acc"(el) {
-    const e = E!; const k = el.dataset.k as "acc" | "to"; e[k] = el.dataset.v!; delete e.err.acc; delete e.err.to;
-    if (k === "acc" && e.type !== "transfer") e.cur = accOpt(e.acc)?.currency ?? e.cur;
-    renderEntry();
+  "e-lvl"() { E!.lvl = null; renderEntry(); },
+  "e-cat"(el) { pickCat(el.dataset.v!); },
+  async "e-newcat"() {
+    if (!app.online) { toast("離線時不能新增分類"); return; }
+    const mains = app.catalog!.categories.filter((m) => m.kind === "income" && !m.is_hidden);
+    const parentSel = mains.length > 1 ? `<label class="eyebrow" for="nc-parent" style="display:block;margin-top:10px">放在哪個主分類</label><select id="nc-parent" class="in">${mains.map((m) => `<option value="${m.category_key}">${esc(m.name)}</option>`).join("")}</select>` : "";
+    dialog("新增收入分類", `<label class="eyebrow" for="nc-name" style="display:block">名稱</label><input id="nc-name" class="in" maxlength="20" placeholder="例：出遊款">${parentSel}`, "新增", async () => {
+      const name = ($<HTMLInputElement>("#nc-name")?.value ?? "").trim();
+      if (!name) { toast("請輸入分類名稱"); return; }
+      const parent = $<HTMLSelectElement>("#nc-parent")?.value ?? mains[0]?.category_key;
+      try {
+        const r = await api.createCategory({ name, kind: "income", ...(parent ? { parent_key: parent } : {}) });
+        await getCatalog(true);
+        if (E) { E.tab = E.tab === "suggest" ? "suggest" : "income"; pickCat(r.category.category_key); }
+        toast(`已新增分類「${esc(name)}」`);
+      } catch (err) { handleError(err); }
+    });
   },
-  "e-tag"(el) { const e = E!; const v = el.dataset.v!; e.tags = e.tags.includes(v) ? e.tags.filter((x) => x !== v) : [...e.tags, v]; renderEntry(); },
-  "e-date"(el) { E!.date = el.dataset.v!; renderEntry(); },
+  "e-go-rec"() { const t = E?.target; if (t === "page") E = null; else closeSheet(); go("/reconcile"); },
+  "e-plus"() {
+    const e = E!; const i = $<HTMLInputElement>("#e-amt"); if (!i) return;
+    if (e.amt && !/[+\-*/×÷]$/.test(e.amt)) e.amt += "+";
+    i.value = e.amt; i.focus(); i.setSelectionRange(e.amt.length, e.amt.length);
+    renderAmountHint();
+  },
+  "e-star"() { toast("常用範本即將推出（需要契約 v1.1）"); },
+  "e-photo"() { toast("收據照片即將推出"); },
+  "e-pick"(el) { E!.pick = el.dataset.v as Pick; renderEntry(); $<HTMLElement>(".pick-l [aria-pressed=true], .pick-l .opt-row")?.focus(); },
+  "e-pick-back"() { const p = E!.pick; E!.pick = null; renderEntry(); $<HTMLElement>(`[data-a=e-pick][data-v=${p}]`)?.focus(); },
+  "e-set"(el) {
+    const e = E!; const v = el.dataset.v!, p = e.pick!;
+    if (p === "tags") { e.tags = e.tags.includes(v) ? e.tags.filter((x) => x !== v) : [...e.tags, v]; delete e.err.tags; renderEntry(); $<HTMLElement>(`.pick-l [data-v="${CSS.escape(v)}"]`)?.focus(); return; }
+    if (p === "acc" || p === "to") { e[p] = v; delete e.err.acc; delete e.err.to; if (p === "acc" && e.type !== "transfer") e.cur = accOpt(v)?.currency ?? e.cur; }
+    else if (p === "proj") e.proj = v;
+    else if (p === "rec") { if (v && !app.online) return; e.rec = v as Freq; delete e.err.rec; }
+    e.pick = null; renderEntry(); $<HTMLElement>(`[data-a=e-pick][data-v=${p}]`)?.focus();
+  },
   "e-save"(el) { saveEntry(!!el.dataset.again); },
   "e-copy"() { const id = E!.id!; openEntry({ id, copy: true }); toast("已複製，修改後儲存成新的一筆"); },
   sug(el) {
     const e = E!; const s = e.sugg[Number(el.dataset.i)]; if (!s) return;
     e.m = s.merchant; e.sugg = [];
-    if (s.last_category_key && findCat(s.last_category_key)) { const k = findCat(s.last_category_key)!.kind; if (k === "expense" || k === "income") { e.type = k; e.cat = s.last_category_key; } }
+    if (s.last_category_key && findCat(s.last_category_key)) { const k = findCat(s.last_category_key)!.kind; if (k === "expense" || k === "income") { e.type = k; e.cat = s.last_category_key; if (e.tab !== "suggest") e.tab = k; e.lvl = k === "expense" && mainCat(e.cat)?.category_key !== e.cat ? mainCat(e.cat)?.category_key ?? null : null; } }
     if (s.last_account_key && accOpt(s.last_account_key)?.can_record) { e.acc = s.last_account_key; e.cur = accOpt(e.acc)!.currency; }
     renderEntry();
   },
   async "queue-open"(el) { const k = el.dataset.id!.replace(/^q:/, ""); const it = (await queue.list()).find((x) => x.key === k); if (it) openFromQueue(it); },
   async "queue-drop"() { const e = E!; dialog("捨棄這筆待同步紀錄？", "<p style='margin:0'>還沒送到伺服器，捨棄後無法復原。</p>", "捨棄", async () => { await queue.remove(e.qkey!); closeSheet(); E = null; reload(); }, { danger: true }); },
 });
+/** 只更新算式提示，不重畫整個表單（輸入時游標才不會跳） */
+function renderAmountHint() {
+  const e = E; if (!e) return;
+  const box = $(".arow")?.parentElement; if (!box) return;
+  const cur = e.type === "transfer" ? accOpt(e.acc)?.currency ?? "TWD" : e.cur;
+  let h = box.querySelector<HTMLElement>(".calc-hint");
+  if (!hasOperator(e.amt)) { h?.remove(); return; }
+  if (!h) { h = document.createElement("p"); h.className = "calc-hint"; h.setAttribute("aria-live", "polite"); box.querySelector(".arow")!.after(h); }
+  const v = calc(e.amt, curInfo(cur).decimals);
+  h.classList.toggle("bad", v === null); h.textContent = v === null ? "算式不完整" : "= " + fmt(v, cur);
+}
 document.addEventListener("input", (ev) => {
   const t = ev.target as HTMLInputElement; if (!E || !t.id?.startsWith("e-")) return;
   const e = E;
-  if (t.id === "e-amt") { e.amt = t.value.replace(/[^\d.]/g, ""); if (t.value !== e.amt) t.value = e.amt; }
+  if (t.id === "e-amt") {
+    // 允許數字、小數點與 + − × ÷（簡易計算機）
+    const v = t.value.replace(/[＋]/g, "+").replace(/[−–]/g, "-").replace(/[^\d.+\-*/×÷]/g, "");
+    e.amt = v; if (t.value !== v) t.value = v;
+    if (e.err.amt) { delete e.err.amt; t.removeAttribute("aria-invalid"); t.closest(".arow")?.classList.remove("bad"); document.getElementById("err-amt")?.remove(); }
+    renderAmountHint();
+  }
   else if (t.id === "e-amtin") { e.amtIn = t.value.replace(/[^\d.]/g, ""); if (t.value !== e.amtIn) t.value = e.amtIn; }
   else if (t.id === "e-m") {
     e.m = t.value; clearTimeout(sugT);
@@ -352,7 +558,7 @@ document.addEventListener("input", (ev) => {
     sugT = setTimeout(async () => {
       if (!E || E.m.trim() !== q) return;
       if (!q || !app.online) { E.sugg = []; } else { try { E.sugg = (await api.merchants(q, 5)).rows.filter((r) => r.merchant !== q); } catch { E.sugg = []; } }
-      const box = $("#sugg"); if (box) { box.innerHTML = ""; renderEntry(); const inp = $<HTMLInputElement>("#e-m"); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
+      renderEntry(); const inp = $<HTMLInputElement>("#e-m"); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     }, 220);
   }
   else if (t.id === "e-note") e.note = t.value;
@@ -360,8 +566,12 @@ document.addEventListener("input", (ev) => {
 });
 document.addEventListener("change", (ev) => {
   const t = ev.target as HTMLInputElement; if (!E || !t.id?.startsWith("e-")) return;
-  if (t.id === "e-d") { E.date = t.value; renderEntry(); }
-  else if (t.id === "e-t") E.time = t.value;
-  else if (t.id === "e-proj") E.proj = t.value;
+  if (t.id === "e-d") { if (t.value) { E.date = t.value; delete E.err.date; } renderEntry(); }
+  else if (t.id === "e-t") { E.time = t.value; renderEntry(); }
   else if (t.id === "e-cur") { E.cur = t.value; renderEntry(); }
+});
+// 桌面瀏覽器：點「日期／時間」按鈕任何位置都打開原生選擇器（iOS 點透明 input 本來就會打開）
+document.addEventListener("click", (ev) => {
+  const t = ev.target as HTMLInputElement;
+  if (t?.classList?.contains("fbtn-in")) { try { (t as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { /* 不支援就用預設行為 */ } }
 });
