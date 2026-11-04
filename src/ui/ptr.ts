@@ -3,6 +3,7 @@
  * 所以在總覽、帳戶、明細頁自己做。瀏覽器分頁裡不啟用，以免和 Safari／Chrome 內建的重複。
  */
 import { ic } from "../lib/dom";
+import { sheetOpen, dialogOpen } from "./overlay";
 
 const THRESHOLD = 64; // 拉超過這個距離（px）放開就更新
 const MAX = 96;
@@ -30,7 +31,7 @@ export function bindPullToRefresh(opt: { enabled: () => boolean; refresh: () => 
     !!(t as Element | null)?.closest?.(".sheet, .dlg, .scrim.on, input, textarea, select, .kpis, .chips-scroll, .seg");
 
   document.addEventListener("touchstart", (e) => {
-    if (mode === "busy" || e.touches.length !== 1 || window.scrollY > 0 || !opt.enabled() || blocked(e.target)) { mode = "idle"; return; }
+    if (mode === "busy" || e.touches.length !== 1 || window.scrollY > 0 || sheetOpen() || dialogOpen() || !opt.enabled() || blocked(e.target)) { mode = "idle"; return; }
     y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; dy = 0; mode = "maybe";
   }, { passive: true });
 

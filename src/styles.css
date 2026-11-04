@@ -16,6 +16,8 @@
   --f-b:'Noto Sans TC','Manrope',system-ui,-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;
   --f-m:'Manrope','Noto Sans TC',system-ui,sans-serif;
   --r-s:8px; --r-m:12px; --r-l:18px;
+  /* 安全區域：統一從變數取值，回歸測試可以注入 :root{--sat:59px} 模擬 iPhone 狀態列 */
+  --sat:env(safe-area-inset-top, 0px); --sab:env(safe-area-inset-bottom, 0px);
   --gut:max(16px, env(safe-area-inset-left, 0px));
   --gutr:max(16px, env(safe-area-inset-right, 0px));
   color-scheme:dark;
@@ -59,7 +61,7 @@ body{
   background-size:24px 24px; background-attachment:fixed;
   color:var(--tx); font:15px/1.55 var(--f-b); -webkit-font-smoothing:antialiased;
 }
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:var(--sat);z-index:30;background:var(--bg)}
 button,input,select{font:inherit;color:inherit}
 a{color:var(--ac)}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
@@ -87,9 +89,9 @@ a{color:var(--ac)}
 /* app shell */
 .app{display:flex;min-height:100vh}
 .rail{display:none}
-.main{flex:1;min-width:0;padding-left:var(--gut);padding-right:var(--gutr);padding-block:0 calc(112px + env(safe-area-inset-bottom,0px))}
+.main{flex:1;min-width:0;padding-left:var(--gut);padding-right:var(--gutr);padding-block:var(--sat) calc(112px + var(--sab))}
 .wrapc{max-width:1200px;margin:0 auto}
-.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin-left:calc(-1 * var(--gut));margin-right:calc(-1 * var(--gutr));padding:12px var(--gutr) 12px var(--gut);background:var(--bg);border-bottom:1px solid var(--ln)}
+.top{position:sticky;top:var(--sat);z-index:20;margin-left:calc(-1 * var(--gut));margin-right:calc(-1 * var(--gutr));padding:12px var(--gutr) 12px var(--gut);background:var(--bg);border-bottom:1px solid var(--ln)}
 .top-in{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:10px}
 .top h1{font:700 24px/1.1 var(--f-d);margin:2px 0 0;letter-spacing:.01em}
 .top .grow{flex:1;min-width:0}
@@ -125,16 +127,16 @@ a{color:var(--ac)}
 .rail-foot{margin-top:auto;padding:12px 10px 0;border-top:1px solid var(--ln)}
 
 /* tab bar */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;background:var(--s1);border-top:1px solid var(--ln);padding:6px var(--gutr) calc(6px + env(safe-area-inset-bottom,0px)) var(--gut)}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;background:var(--s1);border-top:1px solid var(--ln);padding:6px var(--gutr) calc(6px + var(--sab)) var(--gut)}
 .tabbar a,.tabbar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;color:var(--mu);text-decoration:none;font:500 11px/1 var(--f-b);background:none;border:0;cursor:pointer}
 .tabbar a[aria-current="page"]{color:var(--ac)}
 .tabbar .fab{width:60px;height:60px;border-radius:18px;background:var(--ac);color:var(--ac-ink);box-shadow:var(--glow);justify-self:center;transform:translateY(-14px);min-height:0}
 .tabbar .fab .ic{width:28px;height:28px;stroke-width:2.2}
 
 @media (min-width:960px){
-  .rail{display:flex;flex-direction:column;width:236px;flex:none;position:sticky;top:0;height:100vh;border-right:1px solid var(--ln);background:var(--s1);padding:20px 12px 16px max(12px, env(safe-area-inset-left,0px))}
+  .rail{display:flex;flex-direction:column;width:236px;flex:none;position:sticky;top:0;height:100vh;border-right:1px solid var(--ln);background:var(--s1);padding:calc(20px + var(--sat)) 12px 16px max(12px, env(safe-area-inset-left,0px))}
   .tabbar{display:none}
-  .main{padding-left:32px;padding-right:max(32px, env(safe-area-inset-right,0px));padding-block:0 56px}
+  .main{padding-left:32px;padding-right:max(32px, env(safe-area-inset-right,0px));padding-block:var(--sat) 56px}
   .top{margin-left:-32px;margin-right:calc(-1 * max(32px, env(safe-area-inset-right,0px)));padding:16px max(32px, env(safe-area-inset-right,0px)) 16px 32px}
   .only-m{display:none!important}
   :root{--gut:32px}
@@ -227,7 +229,7 @@ a{color:var(--ac)}
 .sumbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);border-radius:var(--r-l);overflow:hidden}
 .sumbar>div{background:var(--s1);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
 .sumbar .num{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.batchbar{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:15;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;margin-top:12px;background:var(--s2);border:1px solid var(--ac-line);border-radius:var(--r-l);box-shadow:var(--shadow)}
+.batchbar{position:sticky;bottom:calc(84px + var(--sab));z-index:15;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;margin-top:12px;background:var(--s2);border:1px solid var(--ac-line);border-radius:var(--r-l);box-shadow:var(--shadow)}
 @media (min-width:960px){.batchbar{bottom:16px}}
 .search{position:relative;flex:1;min-width:0}
 .search .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mu)}
@@ -248,14 +250,14 @@ select.in{appearance:auto}
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;z-index:60;left:0;right:0;bottom:0;max-height:92%;background:var(--s1);border-top:1px solid var(--ln2);border-radius:20px 20px 0 0;transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1),max-height .25s;display:flex;flex-direction:column;box-shadow:var(--shadow);visibility:hidden}
 .sheet.on{transform:none;visibility:visible}
-.sheet.full{max-height:100%;height:100%;border-radius:0}
+.sheet.full{max-height:100%;height:100%;border-radius:0;padding-top:var(--sat)}
 .sheet-h{display:flex;align-items:center;gap:8px;padding:0 var(--gutr) 10px var(--gut);border-bottom:1px solid var(--ln)}
 .sheet-h .h2{flex:1}
 .grab{display:block;width:100%;height:22px;border:0;background:none;cursor:ns-resize;position:relative}
 .grab::after{content:"";position:absolute;left:50%;top:8px;width:40px;height:5px;margin-left:-20px;border-radius:9px;background:var(--ln2)}
 .sheet-b>*{flex-shrink:0}
 .sheet-b{overflow:auto;padding:16px var(--gutr) 20px var(--gut);flex:1;display:flex;flex-direction:column;gap:18px}
-.sheet-f{border-top:1px solid var(--ln);padding:12px var(--gutr) calc(12px + env(safe-area-inset-bottom,0px)) var(--gut);display:flex;gap:8px;flex-wrap:wrap}
+.sheet-f{border-top:1px solid var(--ln);padding:12px var(--gutr) calc(12px + var(--sab)) var(--gut);display:flex;gap:8px;flex-wrap:wrap}
 .sheet-f .btn{flex:1}
 @media (min-width:960px){
   .sheet{left:auto;top:0;bottom:0;width:460px;max-height:none;border-radius:0;border-top:0;border-left:1px solid var(--ln2);transform:translateX(105%)}
@@ -269,7 +271,7 @@ select.in{appearance:auto}
 .dlg{position:fixed;z-index:70;left:50%;top:50%;width:min(420px, calc(100% - 32px));transform:translate(-50%,-46%);opacity:0;pointer-events:none;transition:all .2s;background:var(--s1);border:1px solid var(--ln2);border-radius:16px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
 .dlg.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
 .dlg h2{font:600 18px var(--f-d);margin:0}
-.toast{position:fixed;z-index:80;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:all .25s;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;min-height:52px;width:max-content;max-width:calc(100% - 32px);background:var(--tx);color:var(--bg);border-radius:12px;box-shadow:var(--shadow);font-weight:500}
+.toast{position:fixed;z-index:80;left:50%;bottom:calc(96px + var(--sab));transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:all .25s;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;min-height:52px;width:max-content;max-width:calc(100% - 32px);background:var(--tx);color:var(--bg);border-radius:12px;box-shadow:var(--shadow);font-weight:500}
 .toast.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
 .toast .btn{min-height:36px;background:transparent;border-color:transparent;color:var(--bg);text-decoration:underline;text-underline-offset:3px}
 @media (min-width:960px){.toast{bottom:28px}}
@@ -552,7 +554,7 @@ a.chip{text-decoration:none}
 .hide-amt .amt,.hide-amt .big-n,.hide-amt .huge{filter:blur(8px)}
 
 /* 下拉更新（standalone） */
-.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:60;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--s1);border:1px solid var(--ln2);color:var(--mu);box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-48px);opacity:0;pointer-events:none}
+.ptr{position:fixed;left:50%;top:calc(var(--sat) + 8px);z-index:60;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--s1);border:1px solid var(--ln2);color:var(--mu);box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-48px);opacity:0;pointer-events:none}
 .ptr.ready{color:var(--ac)}
 .ptr.spin svg{animation:ptr-spin .8s linear infinite}
 @keyframes ptr-spin{to{transform:rotate(-360deg)}}
@@ -563,4 +565,16 @@ html.standalone body::before{background:var(--sb)}
 /* iOS：輸入框字級 < 16px 時聚焦會自動放大畫面（TECH-SPEC §13.1），觸控裝置一律 16px */
 @media (hover:none) and (pointer:coarse){
   input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea,.in{font-size:16px!important}
+}
+
+/* 鈴鐺：待處理面板（issue #7）。手機是底部面板（避開手勢條），桌面是鈴鐺下方的彈出面板 */
+.sheet.pop .sheet-b{padding-bottom:calc(20px + var(--sab));gap:0}
+.sheet.pop .sheet-h .h2{display:flex;align-items:center;gap:8px}
+.remind-empty{margin:4px 0;display:flex;align-items:center;gap:6px}
+.remind .btn.sm{flex:none}
+@media (min-width:960px){
+  .sheet.pop{top:calc(var(--sat) + 72px);right:24px;bottom:auto;left:auto;width:420px;max-height:min(70vh,600px);border:1px solid var(--ln2);border-radius:16px;transform:translateY(-8px);opacity:0;transition:transform .18s,opacity .18s}
+  .sheet.pop.on{transform:none;opacity:1}
+  .sheet.pop .sheet-h{padding:14px 18px 12px}
+  .sheet.pop .sheet-b{padding:8px 18px 14px}
 }

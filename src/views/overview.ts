@@ -11,6 +11,7 @@ import { txRow, pbar, stPill, fromBudget, catColor, catIconName } from "../ui/co
 import { dailyChart, donutCard, type Slice } from "../ui/charts";
 import { openEntry } from "../ui/entry";
 import { toast } from "../ui/overlay";
+import { remindList } from "../ui/remind";
 import { pendingAsTx } from "./transactions";
 
 type D = { o: L.Overview; tx: L.Transaction[] };
@@ -53,21 +54,8 @@ function dayMoney(list: L.Transaction[], type: "expense" | "income") {
   if (!Object.keys(by).length) by.TWD = "0";
   return byCurrency(by);
 }
-function alertItem(a: L.Alert): { ic: string; t: string; s: string; btn: string; ac?: boolean } {
-  switch (a.type) {
-    case "reconcile_due": return { ic: "scale", t: `${esc(a.account_name)} ${a.days} 天未對帳`, s: "對帳可以找出漏記或重複", btn: `<a class="btn sm" href="${href("/reconcile?account=" + encodeURIComponent(a.account_key))}">對帳</a>` };
-    case "uncategorized": return { ic: "alert", t: `${a.count} 筆交易未分類`, s: "來自聊天機器人、捷徑與自動入帳", btn: `<a class="btn sm" href="${href("/transactions?categories=uncategorized")}">分類</a>` };
-    case "recurring_due": { const dd = daysBetween(today(), a.due_date); return { ic: "repeat", ac: true, t: `週期交易：${esc(a.name)} ${dd === 0 ? "今天" : dd === 1 ? "明天" : dd < 0 ? `已過期 ${-dd} 天` : `${dd} 天後`}到期`, s: `${md(a.due_date)} · ${fmt(a.amount.amount, a.amount.currency)}`, btn: `<span class="row" style="gap:6px"><button class="btn sm g" data-a="occ-skip" data-id="${a.rule_id}" data-d="${a.due_date}">略過</button><button class="btn sm" data-a="occ-ok" data-id="${a.rule_id}" data-d="${a.due_date}">確認入帳</button></span>` }; }
-    case "budget_warning": case "budget_over": return { ic: "target", t: `${esc(a.name)} 預算${a.type === "budget_over" ? "已超支" : "快用完"}（${Math.round(a.ratio * 100)}%）`, s: "看看各分類的花費", btn: `<a class="btn sm" href="${href("/budgets")}">查看</a>` };
-    case "goal_behind": return { ic: "target", t: `存錢目標「${esc(a.name)}」進度落後`, s: "照目前速度會晚於期限達成", btn: `<a class="btn sm" href="${href("/goals/" + a.goal_id)}">查看</a>` };
-    case "card_due": { const dd = daysBetween(today(), a.due_date); return { ic: "card", t: `${esc(a.name)} 帳單 ${dd >= 0 ? `${dd} 天後` : "已"}到期`, s: `${md(a.due_date)} · ${fmt(a.amount.amount, a.amount.currency)}`, btn: `<button class="btn sm" data-a="pay" data-id="${esc(a.account_key)}" data-amt="${a.amount.amount}">繳卡費</button>` }; }
-    case "opening_missing": return { ic: "wallet", t: `${a.count} 個帳戶還沒設定期初餘額`, s: "設定後才能計算餘額與對帳", btn: `<a class="btn sm" href="${href("/settings/accounts/opening")}">設定</a>` };
-    case "data_notice": return { ic: "alert", t: esc(a.message), s: "", btn: "" };
-  }
-}
 export function remindCard(alerts: L.Alert[]) {
-  const items = alerts.map(alertItem);
-  return `<div class="card" id="remind"><div class="ch"><h2 class="h2">${ic("bell")}待處理</h2><span class="eyebrow">${items.length} 項</span></div>${items.length ? items.map((r) => `<div class="remind"><span class="ri ${r.ac ? "ac" : ""}">${ic(r.ic, "s")}</span><div style="flex:1;min-width:0"><div style="font-weight:500">${r.t}</div>${r.s ? `<div class="xs mu">${r.s}</div>` : ""}</div>${r.btn}</div>`).join("") : `<p class="mu sm">${ic("check", "s")} 都處理完了</p>`}</div>`;
+  return `<div class="card" id="remind"><div class="ch"><h2 class="h2">${ic("bell")}待處理</h2><span class="eyebrow">${alerts.length} 項</span></div>${remindList(alerts)}</div>`;
 }
 function delta(d: L.Delta | undefined, lowerGood = false) {
   if (!d || d.change_ratio == null) return `<span class="delta flat">—</span>`;

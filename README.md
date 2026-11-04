@@ -64,6 +64,7 @@
 
 - 月曆上有小圓點的日期代表有紀錄，點日期看當天明細；拉下方的橫條可以收合成一週。
 - 「待處理」會提醒：多久沒對帳、未分類的交易、即將到期的週期扣款與信用卡帳單、預算快用完。
+- 任何頁面右上（桌面版左上）的 🔔 鈴鐺會在原地打開同一份待處理清單，不會換頁；點某一項的按鈕才會前往對應頁面。
 - **全部交易** 可以搜尋商家與備註，用篩選選日期、類型、帳戶、分類、來源、標籤、金額範圍。
 - 按 **批次** 一次修改多筆的分類、帳戶、標籤、專案，或一次刪除。
 - 桌面版可以把篩選結果 **匯出 CSV**。
@@ -151,6 +152,7 @@ npm run build                                    # 正式版輸出到 dist/（�
 | `public/sw.js` | Service worker：離線時讀快取（catalog、overview、最近一頁明細） |
 | `public/logo-*.png`、`apple-touch-icon.png`、`icon-maskable-*.png` | App 圖示（一般／iOS／Android 自適應） |
 | `src/ui/ptr.ts` | 主畫面 App 的下拉更新 |
+| `src/ui/remind.ts` | 待處理提醒清單（總覽卡片與鈴鐺面板共用） |
 | `deploy/` | 掛到 Next.js（`next-finance.mjs`）或 nginx（`nginx-finance.conf`）的設定範例 |
 | `docs/` | 部署說明、契約修訂提案、README 用的 logo 與截圖 |
 | `mocks/fixtures/*.json` | DESIGN-BRIEF §8 的假資料，加上契約 §7 要求的情境 |
