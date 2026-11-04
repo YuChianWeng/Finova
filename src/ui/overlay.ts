@@ -33,7 +33,7 @@ export function openSheet(kind: SheetKind, html: string, onClose?: () => void, o
   const s = $("#sheet")!;
   s.innerHTML = html;
   s.removeAttribute("style");
-  s.classList.toggle("pop", o.cls === "pop");
+  s.classList.remove("pop", "entry"); if (o.cls) s.classList.add(o.cls); // pop：鈴鐺面板；entry：記一筆（手機全螢幕）
   s.classList.add("on"); $("#scrim")!.classList.add("on");
   document.body.style.overflow = "hidden";
   (s.querySelector<HTMLElement>("[data-a=closeall]") ?? focusables(s)[0])?.focus({ preventScroll: true });

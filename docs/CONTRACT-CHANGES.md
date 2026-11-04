@@ -36,3 +36,24 @@ FRONTEND-CONTRACT v1.0 是凍結版，不在這個 repo 裡。這份文件列出
 /finance                 總覽（每日明細）
 /finance/accounts        帳戶總覽（App 首頁；manifest start_url = /finance/accounts?source=pwa）
 ```
+
+## 4. 記一筆新版面需要的新欄位與類型（issue #10，**新增項目，尚未實作**）
+
+新版記一筆（全螢幕「新增記錄」）已經依 v1.0 上線。以下項目在畫面上先顯示「即將推出」或暫不顯示，需要契約 v1.1 和後端支援後再打開：
+
+| 項目 | v1 前端現況 | v1.1 建議 |
+|---|---|---|
+| **應收款項**（借錢給別人） | 分頁顯示「即將推出」，不能送出 | 新增 `type: "receivable"`：`account_key`（應收帳戶，`group: receivable`）、`counterparty`（對象名稱）、`due_date`（選填）。收回時用一筆「收款」沖銷，API：`POST /transactions`（新 type）、`GET /receivables?status=open` |
+| **應付款項**（欠別人的錢） | 同上 | `type: "payable"`，欄位同上，對應負債帳戶；還款時沖銷 |
+| **系統** | 分頁說明「餘額調整請從對帳建立」，按鈕前往 `/finance/reconcile` | 不需要新 type：對應既有的 `adjustment`，維持只能從對帳流程建立 |
+| **商家**（和名稱分開） | 不顯示；「名稱」就是 `merchant` | 選填 `store: string \| null`（例如名稱「午餐」、商家「八方雲集」），`GET /merchants` 也回傳 `store` |
+| **發票號碼／隨機碼** | 不顯示 | `invoice: { number: string; random_code: string } \| null`，格式 `AB-12345678`、4 碼；後續可接雲端發票 |
+| **紅利回饋** | 不顯示 | `reward: Money \| null`（信用卡回饋點數或現金回饋），報表可另外統計 |
+| **常用範本**（名稱旁的 ☆） | 點了顯示「即將推出」 | `GET/POST/DELETE /templates`：`{ template_id, name, body: Omit<CreateTransactionRequest, "idempotency_key" \| "occurred_at"> }`，catalog 加 `templates` |
+| **收據照片** | 相片按鈕顯示「即將推出」（SPEC D-7 不在 v1 範圍） | `POST /transactions/:id/attachments`（multipart），交易加 `attachments: { id, url, thumb_url }[]` |
+
+已經可以用、沿用 v1.0 API 的新功能：
+
+- **週期**：選了每天／每週／每月／每年後，儲存交易時另外呼叫 `POST /api/ledger/recurring` 建立規則（`mode: "confirm"`，從下一期開始），本筆交易照常建立。
+- **收入「＋新增」分類**：`POST /api/ledger/categories`（`kind: "income"`，放在收入主分類底下），建立後重新載入 catalog 並自動選取。
+- **金額計算機**：只在前端計算（十進位定點運算），送出的 `amount` 仍是一般的十進位字串。
