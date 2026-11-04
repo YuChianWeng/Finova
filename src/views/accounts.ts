@@ -325,11 +325,11 @@ function recordsHTML(d: Det | null) {
 function renderWideAcc(d: AW) {
   const k = d.det?.key ?? null, n = d.det?.rows.length ?? 0;
   return `<div class="accw pane-${ui.accW.pane}">
-    <section class="accw-l" aria-label="帳戶清單">${masterHTML(d.acc, k)}</section>
+    <section class="accw-l" aria-label="帳戶清單" tabindex="0">${masterHTML(d.acc, k)}</section>
     <div class="accw-r">
       <div class="accw-tabs seg" role="tablist" aria-label="帳戶內容"><button role="tab" data-a="accw-pane" data-v="info" aria-selected="${ui.accW.pane === "info"}">帳戶資訊</button><button role="tab" data-a="accw-pane" data-v="rec" aria-selected="${ui.accW.pane === "rec"}">一般記錄 (${n})</button></div>
-      <section class="accw-m" id="accw-m" aria-label="帳戶詳情">${detailHTML(d.det)}</section>
-      <section class="accw-x" id="accw-x" aria-label="一般記錄">${recordsHTML(d.det)}</section>
+      <section class="accw-m" id="accw-m" aria-label="帳戶詳情" tabindex="0">${detailHTML(d.det)}</section>
+      <section class="accw-x" id="accw-x" aria-label="一般記錄" tabindex="0">${recordsHTML(d.det)}</section>
     </div></div>`;
 }
 /** 只更新中欄、右欄（不整頁重畫；左欄的捲動位置和展開狀態都保留） */

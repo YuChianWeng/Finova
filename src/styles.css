@@ -735,7 +735,7 @@ html.standalone body::before{background:var(--sb)}
 
   /* C. 帳戶：master–detail */
   .accw{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr);gap:20px;align-items:start}
-  .accw-l,.accw-m,.accw-x{position:sticky;top:calc(var(--sat) + 84px);max-height:calc(100dvh - var(--sat) - 108px);overflow-y:auto;overscroll-behavior:contain;min-width:0;scrollbar-width:thin}
+  .accw-l,.accw-m,.accw-x{position:sticky;top:calc(var(--sat) + 84px);max-height:calc(100dvh - var(--sat) - 108px);overflow-y:auto;overscroll-behavior:contain;min-width:0}
   .accw-lh,.accw-xh,.accw-mh{display:flex;align-items:center;gap:8px;min-height:44px}
   .accw-lh .h2{flex:1}
   .accw-hero{margin:8px 0 12px;padding:22px 18px;border-radius:20px;color:#fff;text-align:center;display:flex;flex-direction:column;gap:8px;
@@ -808,4 +808,25 @@ html.standalone body::before{background:var(--sb)}
   .accw-mh2 .rng{margin:0}
   .accw-tabs [role=tab][aria-selected="true"]{background:var(--s3);color:var(--tx);font-weight:600}
   .accw-tabs [role=tab]{flex:1}
+}
+
+/* ------------------------------------------------------------ 捲動條（issue #14）
+   只在滑鼠／觸控板的裝置：細（6px）圓角滑塊、透明軌道、沒有箭頭；
+   閒置時隱藏；滑鼠移入該欄或鍵盤焦點在欄內（.sb-on）、捲動中（.is-scrolling）才出現，class 由 lib/layout.ts 的 bindScrollHint 加上。
+   Chrome 121+ 只要設定 scrollbar-width 就忽略 ::-webkit-scrollbar，所以 scrollbar-width／color
+   只放在不支援 ::-webkit-scrollbar 的瀏覽器（Firefox）。觸控裝置維持系統的浮動滑條。 */
+@media (hover:hover) and (pointer:fine){
+  .accw-l,.accw-m,.accw-x,.ovw-side,.cgrid,.sheet-b{scrollbar-gutter:stable}
+  .accw-l:focus-visible,.accw-m:focus-visible,.accw-x:focus-visible,.ovw-side:focus-visible{outline-offset:-2px;border-radius:12px}
+  ::-webkit-scrollbar{width:10px;height:10px;background:transparent}
+  ::-webkit-scrollbar-button{display:none;width:0;height:0}
+  ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
+  /* 10px 的軌道，滑塊用透明邊框留出 2px，看起來 6px */
+  ::-webkit-scrollbar-thumb{background-color:transparent;background-clip:padding-box;border:2px solid transparent;border-radius:6px;min-height:32px}
+  .sb-on::-webkit-scrollbar-thumb,.is-scrolling::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--mu) 55%,transparent)}
+  ::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:active{background-color:var(--mu)}
+  @supports not selector(::-webkit-scrollbar){
+    *{scrollbar-width:thin;scrollbar-color:transparent transparent}
+    :hover,:focus-within,.sb-on,.is-scrolling{scrollbar-color:color-mix(in srgb,var(--mu) 55%,transparent) transparent}
+  }
 }
