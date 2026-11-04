@@ -72,3 +72,68 @@ FRONTEND-CONTRACT v1.0 是凍結版，不在這個 repo 裡。這份文件列出
 | 即將到來：「週期 #期數 / 無限期」 | 從 `RecurringRule.start_date`、`freq`、`interval`、`by_monthday` 推算第幾期；有 `end_date` 時算剩餘期數（Asia/Taipei 日期） | `Occurrence` 加 `index: number`、`remaining: number \| null` |
 | 帳戶資訊：主帳戶、紅利回饋、國外交易手續費 | 契約沒有，顯示「—」，**不捏造值** | `AccountSummary` 加 `parent_account_key: string \| null`、`reward_rate: number \| null`（例如 0.01 = 1%）、`foreign_fee_rate: number \| null` |
 | 帳戶頁「格狀」檢視 | 按鈕顯示「即將推出」 | 不需要 API，之後前端實作 |
+
+## 6. 信用卡逐筆對帳（issue #15，**新增項目**，前端已用 mock 實作）
+
+v1.0 的對帳只比對整體餘額。這一節新增「依電子帳單逐筆核對」需要的型別與端點，全部是**加法**，不改 v1.0 既有的任何欄位或端點。帳單的取得與解析（信箱、PDF、比對演算法、資料表）由後端／Roha 的流程負責，**不是前端端點**；前端只讀取和處理。型別已放在 `src/types/ledger.ts` 的 v1.1 區塊。
+
+### 路由（§8 新增）
+
+```
+/finance/reconcile/statements?account=<key>   每期帳單清單
+/finance/reconcile/statements/<statement_id>  逐筆對帳
+```
+
+### 型別
+
+issue #15 提出的 `Statement`、`StatementLine` 照用，另外補了幾個欄位（標「補充」）：
+
+| 型別 | 欄位 | 說明 |
+|---|---|---|
+| `Statement` | `reconciled_at: ISODateTime \| null` | 補充：完成對帳的時間 |
+| `StatementLine` | `amount` | 以信用卡角度：消費為正，退款、繳款為負 |
+| | `match.confirmed: boolean` | 補充：自動配對預設 `false`，使用者確認後為 `true`；手動配對、新增到帳本直接是 `true` |
+| | `suggested_category_key: string \| null` | 補充：「新增到帳本」時預設的分類 |
+| | `ignore_reason: string \| null` | 補充：忽略時填的原因 |
+| | `raw_text: string \| null` | 補充：解析前的原文，「查看原始帳單文字」用（只有這一行，不含帳單其他個資） |
+| `StatementDetail` | `ledger: Transaction[]` | 補充：`lines[].match` 和 `candidates` 參照到的帳本記錄，畫面並排顯示用（不用再逐筆查詢） |
+| | `totals: { statement, matched_ledger, ledger_period }` | 補充：帳單未忽略行合計、已配對帳本合計、帳本同期間合計 |
+| `Transaction` | `statement?: { statement_id; line_id; reconciled; close_date } \| null` | 補充：這筆配對到哪一期帳單的哪一行；`reconciled` 為 `true` 時明細顯示「已對帳」，編輯、刪除前提醒。v1.0 後端不回傳＝視為 `null` |
+
+### 端點
+
+issue #15 的端點照用；所有寫入端點都回傳更新後的 `StatementDetail`，畫面不用再查一次：
+
+| 端點 | 回傳 | 說明 |
+|---|---|---|
+| GET `/statements?account=` | `{ rows: Statement[] }` | 依結帳日新到舊 |
+| GET `/statements/:id` | `StatementDetail` | |
+| POST `/statements/:id/lines/:line_id/match` | `StatementDetail` | `{ transaction_id }`；必須是同一張卡、還沒配對到其他行的記錄，否則 `VALIDATION_ERROR` |
+| POST `/statements/:id/lines/:line_id/confirm` | `StatementDetail` | 只能確認金額相同的配對；金額不同回 `VALIDATION_ERROR` |
+| POST `/statements/:id/lines/:line_id/ignore` | `StatementDetail` | `{ reason? }` |
+| POST `/statements/:id/lines/:line_id/add` | `CreateResult & { detail: StatementDetail }` | body 和 `POST /transactions` 相同（只接受支出／收入，帳戶必須是這張卡）；冪等 key 由後端依 `statement_id`＋`line_id` 推導，同一行重送回 `duplicate` |
+| POST `/statements/:id/finalize` | `StatementDetail` | 條件不符回 409 `STATEMENT_NOT_BALANCED` |
+
+「金額不同」時的「用帳單金額更新帳本」沿用 v1.0 的 `PATCH /transactions/:id`（帶 `expected_version`），成功後再呼叫 `confirm`；不需要新端點。
+
+### 狀態與完成條件（前端 `src/lib/statement.ts`，後端請用同樣的定義）
+
+- 每一行的 `state` 由後端依配對與帳本即時推算：
+  - `ignored`：使用者忽略。
+  - 有配對：帳本金額 ≠ 帳單金額 → `amount_differs`；由「新增到帳本」建立 → `added`；其他 → `matched`。配對到的帳本記錄被刪除時，配對自動解除。
+  - 沒有配對：同一期有另一行同一天、同金額 → `possible_duplicate`；否則 `missing`。
+- **需要處理**：`missing`、`amount_differs`、`possible_duplicate`，以及 `matched` 但 `confirmed = false`。`counts.needs_action` 就是這個數字。
+- **差額** = 帳單未忽略行的金額合計 − 已配對帳本記錄的金額合計（信用卡角度）。沒配對的行，帳本那一側算 0。
+- 「帳單沒有的帳本記錄」（`unmatched_ledger`）**不計入差額**：卡片消費常常跨期入帳，若用「帳本同期間合計」計算，這些記錄會讓差額永遠不為 0。畫面另外顯示 `totals.ledger_period` 供參考。
+- **完成對帳**：需要處理 = 0，且差額 = 0。完成後 `status = "reconciled"`，這一期的寫入端點回 409 `STATEMENT_FINALIZED`。
+
+### 錯誤碼（§5 新增）
+
+| 代碼 | HTTP | 說明 |
+|---|---|---|
+| `STATEMENT_NOT_BALANCED` | 409 | 還有需要處理的行，或差額不為 0 |
+| `STATEMENT_FINALIZED` | 409 | 這一期已完成對帳，不能再修改 |
+
+### 離線
+
+這個畫面離線時唯讀（和 §6 一致）：動作按鈕停用並說明原因，「新增到帳本」不會進離線佇列。

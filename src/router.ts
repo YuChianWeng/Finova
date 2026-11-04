@@ -21,6 +21,8 @@ const TABLE: [RegExp, string, string[]][] = [
   [/^\/goals$/, "goals", []],
   [/^\/goals\/([^/]+)$/, "goal", ["id"]],
   [/^\/reconcile$/, "reconcile", []],
+  [/^\/reconcile\/statements\/?$/, "statements", []],
+  [/^\/reconcile\/statements\/([^/]+)$/, "statement", ["id"]],
   [/^\/settings$/, "settings", []],
   [/^\/settings\/accounts$/, "settings-accounts", []],
   [/^\/settings\/accounts\/opening$/, "opening", []],

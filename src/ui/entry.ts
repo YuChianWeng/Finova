@@ -40,6 +40,10 @@ export type Entry = {
   tab: Tab; lvl: string | null; pick: Pick | null; rec: Freq;
   err: Record<string, string>; formErr: string | null; retryable: boolean; busy: boolean;
   hist?: L.TransactionDetail["history"]; orig?: L.Transaction; sugg: L.MerchantSuggestion[];
+  /** 從信用卡對帳單「新增到帳本」（issue #15）：儲存時改用對帳單的 add 端點，並自動配對到這一行 */
+  stmt?: { statement_id: string; line_id: string; label: string };
+  /** 編輯已對帳的記錄時，已經提醒過（只提醒一次） */
+  warned?: boolean;
 };
 let E: Entry | null = null;
 export const entryState = () => E;
@@ -75,7 +79,11 @@ export async function openEntry(o: { id?: number; copy?: boolean; type?: Kind; p
   if (o.id) {
     try { E = fromTx(await api.transaction(o.id), o.copy); }
     catch (e) { handleError(e); return; }
-  } else { E = { ...blank(o.type), ...(o.prefill ?? {}) }; if (o.prefill?.type) E.tab = o.prefill.type; }
+  } else {
+    E = { ...blank(o.type), ...(o.prefill ?? {}) }; if (o.prefill?.type) E.tab = o.prefill.type;
+    // 對帳單新增：冪等 key 由帳單行推導，重送或重開表單都不會重複新增
+    if (E.stmt) E.key = `web:stmt-${E.stmt.line_id}`.replace(/[^\w:-]/g, "-");
+  }
   E.target = o.target ?? "sheet";
   if (E.target === "sheet") { showSheet(); focusAmount(); }
 }
@@ -241,10 +249,12 @@ function bodyHTML(): string {
   const actionsRow = e.mode === "edit"
     ? `<div class="row e-more"><button class="btn dg-t" data-a="askdel" data-id="${e.id}" ${dis}>${ic("trash", "s")}刪除</button><button class="btn" data-a="e-copy" ${dis}>${ic("copy", "s")}複製成新的一筆</button></div>`
     : e.mode === "queue" ? `<div class="row e-more"><button class="btn dg-t" data-a="queue-drop">${ic("trash", "s")}捨棄這筆待同步紀錄</button></div>`
-    : `<button class="btn wide" data-a="e-save" data-again="1" ${dis}>${ic("plus", "s")}儲存並再記一筆</button>`;
+    : e.stmt ? "" : `<button class="btn wide" data-a="e-save" data-again="1" ${dis}>${ic("plus", "s")}儲存並再記一筆</button>`;
   const hist = e.mode === "edit" && e.hist ? `<div class="fld"><span class="eyebrow">修改紀錄</span><div class="hist">${e.hist.slice().reverse().map((h) => { const s = splitDT(h.at); return `<div><span class="num">${md(s.date)} ${s.time}</span> · <span class="src">${esc(h.actor)}</span><br><span class="mu">${({ create: "建立", update: "修改", delete: "刪除", restore: "還原", migrate: "從 MOZE 匯入" } as const)[h.action]}${h.changed_fields.length ? "：" + h.changed_fields.map((f) => FIELD_TEXT[f] ?? f).join("、") : ""}</span></div>`; }).join("")}</div></div>` : "";
   const info = e.mode === "edit" && e.orig ? `<p class="xs mu" style="margin:0">來源：${SOURCE_TEXT[e.orig.source]} · 版本 ${e.version}</p>` : "";
-  return formErr + tabs() + cat + amountBlock() + fields() + note + actionsRow + info + hist;
+  const stmtNote = e.stmt && e.mode === "new" ? `<div class="callout">${ic("receipt")}<div>從對帳單新增：<b>${esc(e.stmt.label)}</b><br><span class="xs mu">儲存後會自動配對到帳單的這一行。</span></div></div>` : "";
+  const rec = e.mode === "edit" && e.orig?.statement?.reconciled ? `<div class="callout warn">${ic("alert")}<div>這筆已在 ${md(e.orig.statement.close_date)} 帳單完成對帳。修改金額、日期或帳戶，會讓那一期帳單對不上。</div></div>` : "";
+  return formErr + stmtNote + rec + (e.stmt ? "" : tabs()) + cat + amountBlock() + fields() + note + actionsRow + info + hist;
 }
 const FIELD_TEXT: Record<string, string> = { amount: "金額", account: "帳戶", category: "分類", merchant: "名稱", note: "備註", tags: "標籤", project: "專案", occurred_at: "時間", type: "類型", currency: "幣別" };
 /** 面板與 /finance/new 共用：頂部列＋可捲動內容 */
@@ -301,12 +311,17 @@ export async function saveEntry(again = false) {
   const shown = fmt(e.amt, tr ? accOpt(e.acc)?.currency ?? "TWD" : e.cur);
 
   // 離線：新增進佇列，編輯停用
+  if (!app.online && e.stmt) { e.formErr = "離線中不能從對帳單新增，連線後再試"; renderEntry(); return; }
   if (!app.online && e.mode !== "edit") {
     await queue.enqueue({ key: e.key, kind: tr ? "transfer" : "transaction", body: tr ? trBody() : txBody(), queued_at: new Date().toISOString(), error: null });
     toast(`離線中，已暫存 ${esc(label)} ${shown}，連線後自動同步`);
     return finish(again);
   }
   if (!app.online) { e.formErr = "離線中不能修改，連線後再試"; renderEntry(); return; }
+  if (e.mode === "edit" && e.orig?.statement?.reconciled && !e.warned) {
+    dialog("修改已對帳的記錄？", `<p style="margin:0">這筆已在 ${md(e.orig.statement.close_date)} 的信用卡帳單完成對帳。修改後，那一期的帳單和帳本可能會對不上。</p>`, "仍要修改", () => { e.warned = true; saveEntry(again); }, { cancel: "先不要" });
+    return;
+  }
 
   e.busy = true; renderEntry();
   try {
@@ -330,6 +345,10 @@ export async function saveEntry(again = false) {
       if (e.mode === "queue") await queue.remove(e.qkey!);
       toast(`${res.status === "duplicate" ? "這筆先前已送出" : "已記錄"} ${esc(label)} ${shown}`, () => undoCreate(res.legs[0]));
       return finish(again);
+    } else if (e.stmt && e.mode === "new") {
+      const res = await api.stmtAdd(e.stmt.statement_id, e.stmt.line_id, txBody());
+      toast(`${res.status === "duplicate" ? "這筆先前已新增" : "已新增並配對"} ${esc(label)} ${shown}`, () => undoCreate(res.transaction));
+      return finish(false);
     } else {
       const body = txBody();
       const res = await api.createTransaction(body);
@@ -407,7 +426,8 @@ export async function askDelete(id: number) {
   try { t = E?.orig?.id === id ? E.orig : await api.transaction(id); } catch (err) { handleError(err); return; }
   if (!app.online) { toast("離線中不能刪除"); return; }
   const group = t.transfer ? "<br>轉帳的轉出、轉入兩筆會一起刪除。" : "";
-  dialog("刪除這筆紀錄？", `<p style="margin:0 0 6px"><b>${esc(t.merchant ?? "")}</b> · ${amtHTML(t)} · ${md(t.date)}</p><p class="mu" style="margin:0">30 天內可在 設定 › 最近刪除 中復原。${group}</p>`, "刪除", async () => {
+  const recd = t.statement?.reconciled ? `<div class="callout warn" style="margin-bottom:8px">${ic("alert")}<div>這筆已在 ${md(t.statement.close_date)} 的信用卡帳單完成對帳，刪除後那一期會對不上。</div></div>` : "";
+  dialog("刪除這筆紀錄？", `${recd}<p style="margin:0 0 6px"><b>${esc(t.merchant ?? "")}</b> · ${amtHTML(t)} · ${md(t.date)}</p><p class="mu" style="margin:0">30 天內可在 設定 › 最近刪除 中復原。${group}</p>`, "刪除", async () => {
     try {
       const res = await api.deleteTransaction(t.id, t.version);
       if (E) { closeSheet(); E = null; }

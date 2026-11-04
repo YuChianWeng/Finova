@@ -121,6 +121,7 @@ export type Transaction = {
   recurring_rule_id: string | null;
   balance_after: Money | null;          // 只有篩選單一帳戶、且該帳戶已設定期初時才有值
   is_pending_sync?: boolean;            // 只在前端離線佇列中使用，不會由後端回傳
+  statement?: StatementRef | null;      // v1.1 提案（issue #15）：已配對到信用卡帳單的哪一行；v1.0 後端不回傳＝null
   created_at: ISODateTime;
   updated_at: ISODateTime;
 };
@@ -531,4 +532,57 @@ export const ERROR_CODES = [
   "ACCOUNT_INACTIVE", "ACCOUNT_IN_USE", "MERGE_INCOMPATIBLE", "MERGE_CREATES_SELF_TRANSFER", "CONFIRM_NAME_MISMATCH",
   "IDEMPOTENCY_CONFLICT", "VERSION_CONFLICT", "RESTORE_CONFLICT", "NOT_FOUND", "AUTH_EXPIRED", "FORBIDDEN",
   "DB_BUSY", "WRITE_SERVICE_UNAVAILABLE",
+  // v1.1 提案（issue #15）：信用卡逐筆對帳
+  "STATEMENT_NOT_BALANCED", "STATEMENT_FINALIZED",
 ] as const;
+
+/* ================================================================
+ * v1.1 提案（issue #15）：信用卡逐筆對帳。全部是新增項目，不影響 v1.0。
+ * 說明見 docs/CONTRACT-CHANGES.md §6。
+ * ================================================================ */
+export type StatementStatus = "draft" | "in_review" | "reconciled";
+export type Statement = {
+  statement_id: string;
+  account_key: string;
+  period_start: ISODate; period_end: ISODate;      // 帳單期間（依入帳日）
+  close_date: ISODate; due_date: ISODate | null;   // 結帳日／繳款截止日
+  total_due: Money; min_due: Money | null;
+  prev_balance: Money | null; payments: Money | null;
+  status: StatementStatus;
+  counts: { lines: number; matched: number; needs_action: number };
+  source: { kind: "email" | "upload"; received_at: ISODateTime } | null;
+  reconciled_at: ISODateTime | null;               // 提案補充：完成對帳的時間
+};
+export type StatementLineKind = "purchase" | "refund" | "fee" | "interest" | "installment" | "payment" | "other";
+export type StatementLineState = "matched" | "missing" | "amount_differs" | "possible_duplicate" | "ignored" | "added";
+export type StatementLine = {
+  line_id: string;
+  txn_date: ISODate; post_date: ISODate | null;    // 消費日／入帳日
+  description: string;                             // 帳單上的原文
+  amount: Money;                                   // 正數 = 消費，負數 = 退款或繳款（以信用卡的角度）
+  kind: StatementLineKind;
+  fx: { amount: string; currency: CurrencyCode } | null;
+  state: StatementLineState;
+  match: {
+    transaction_id: number; confidence: "exact" | "fuzzy"; by: "auto" | "manual";
+    confirmed: boolean;                            // 提案補充：使用者確認過（自動配對預設 false）
+  } | null;
+  candidates: number[];                            // 候選的 transaction_id
+  suggested_category_key: string | null;           // 提案補充：「新增到帳本」預設分類
+  ignore_reason: string | null;                    // 提案補充
+  raw_text: string | null;                         // 提案補充：解析前的原始文字（查看用）
+};
+export type StatementDetail = {
+  statement: Statement;
+  lines: StatementLine[];
+  /** 帳本有、帳單沒有：同一張卡、帳單期間內、沒有配對到任何一行的記錄 */
+  unmatched_ledger: Transaction[];
+  /** 提案補充：lines 的 match／candidates 參照到的帳本記錄，畫面並排顯示用 */
+  ledger: Transaction[];
+  /** 差額 = 帳單（未忽略的行）合計 − 已配對帳本記錄合計（皆以信用卡角度：消費為正） */
+  diff: Money;
+  /** 提案補充：帳單未忽略行合計、已配對帳本合計、帳本同期間合計（含帳單沒有的記錄） */
+  totals: { statement: Money; matched_ledger: Money; ledger_period: Money };
+};
+export type StatementRef = { statement_id: string; line_id: string; reconciled: boolean; close_date: ISODate };
+

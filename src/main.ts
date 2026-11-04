@@ -17,6 +17,7 @@ import "./views/transactions";
 import "./views/reports";
 import "./views/budgets";
 import "./views/reconcile";
+import "./views/statements";
 import "./views/settings";
 
 const MOCK = import.meta.env.VITE_USE_MOCK === "true";

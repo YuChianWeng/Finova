@@ -71,6 +71,15 @@ export const api = {
   createRecurring: (b: Omit<L.RecurringRule, "rule_id" | "next_due">) => post<{ rule: L.RecurringRule }>("/recurring", b),
   updateRecurring: (id: string, b: Partial<Omit<L.RecurringRule, "rule_id" | "next_due">>) => patch<{ rule: L.RecurringRule }>(`/recurring/${e(id)}`, b),
   confirmOccurrence: (id: string, date: L.ISODate, amount?: string) => post<{ transaction: L.Transaction }>(`/recurring/${e(id)}/occurrences/${date}/confirm`, amount ? { amount } : {}),
+  /* ---------- v1.1 提案：信用卡逐筆對帳（issue #15） ---------- */
+  statements: (account?: string) => get<{ rows: L.Statement[] }>("/statements", { account }),
+  statement: (id: string) => get<L.StatementDetail>(`/statements/${e(id)}`),
+  stmtMatch: (id: string, line: string, transaction_id: number) => post<L.StatementDetail>(`/statements/${e(id)}/lines/${e(line)}/match`, { transaction_id }),
+  stmtConfirm: (id: string, line: string) => post<L.StatementDetail>(`/statements/${e(id)}/lines/${e(line)}/confirm`),
+  stmtIgnore: (id: string, line: string, reason?: string) => post<L.StatementDetail>(`/statements/${e(id)}/lines/${e(line)}/ignore`, reason ? { reason } : {}),
+  stmtAdd: (id: string, line: string, b: L.CreateTransactionRequest) => post<L.CreateResult & { detail: L.StatementDetail }>(`/statements/${e(id)}/lines/${e(line)}/add`, b),
+  stmtFinalize: (id: string) => post<L.StatementDetail>(`/statements/${e(id)}/finalize`),
+
   skipOccurrence: (id: string, date: L.ISODate) => post<{ occurrence: L.Occurrence }>(`/recurring/${e(id)}/occurrences/${date}/skip`),
 };
 export type Api = typeof api;
