@@ -57,3 +57,18 @@ FRONTEND-CONTRACT v1.0 是凍結版，不在這個 repo 裡。這份文件列出
 - **週期**：選了每天／每週／每月／每年後，儲存交易時另外呼叫 `POST /api/ledger/recurring` 建立規則（`mode: "confirm"`，從下一期開始），本筆交易照常建立。
 - **收入「＋新增」分類**：`POST /api/ledger/categories`（`kind: "income"`，放在收入主分類底下），建立後重新載入 catalog 並自動選取。
 - **金額計算機**：只在前端計算（十進位定點運算），送出的 `amount` 仍是一般的十進位字串。
+
+## 5. 平板／桌面版面（issue #12）
+
+新版面全部用 v1.0 既有的 API 組出來，**後端不用改就能上線**。以下是前端目前的做法，以及建議在 v1.1 補上的欄位，讓計算移回後端、減少請求數：
+
+| 需要的資料 | v1 前端做法 | v1.1 建議 |
+|---|---|---|
+| 概覽 KPI（餘額、支出、收入）與上期比較 | 兩次 `GET /transactions?from&to&limit=1`，用回傳的 `summary`（本期、前一個同長度區間），前端用十進位相減算差額與百分比 | `GET /reports/range` 支援任意區間的 `kpi.compare`（目前只比較「上月同期」） |
+| 每日收支長條、累積餘額折線 | `GET /transactions?from&to&types=expense,income` 分頁取完（每頁 200 筆、最多 15 頁），前端依日期加總（只算 TWD，其他幣別另外列出不併入）；累積餘額＝區間內收入 − 支出逐日累加 | `GET /reports/range?granularity=day\|week` 回傳 `series`（目前固定 `month`），省掉逐筆下載 |
+| 帳戶記錄的「記帳後餘額」 | 直接用契約的 `balance_after`（篩選單一帳戶時才有值；未設定期初時為 null，畫面不顯示） | 不需要修改 |
+| 帳戶「記帳筆數」 | `GET /transactions?accounts=<key>&limit=1` 的 `summary.count` | `AccountSummary` 加 `transaction_count` |
+| 帳務統計（支出／收入／轉入／轉出／餘額調整） | 該帳戶該月份的交易分頁取完，前端依 `type`＋`direction` 分組加總 | `AccountDetail.period` 加 `by_type: { type, direction, count, amount }[]` |
+| 即將到來：「週期 #期數 / 無限期」 | 從 `RecurringRule.start_date`、`freq`、`interval`、`by_monthday` 推算第幾期；有 `end_date` 時算剩餘期數（Asia/Taipei 日期） | `Occurrence` 加 `index: number`、`remaining: number \| null` |
+| 帳戶資訊：主帳戶、紅利回饋、國外交易手續費 | 契約沒有，顯示「—」，**不捏造值** | `AccountSummary` 加 `parent_account_key: string \| null`、`reward_rate: number \| null`（例如 0.01 = 1%）、`foreign_fee_rate: number \| null` |
+| 帳戶頁「格狀」檢視 | 按鈕顯示「即將推出」 | 不需要 API，之後前端實作 |
