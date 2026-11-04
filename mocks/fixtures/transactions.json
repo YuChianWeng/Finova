@@ -6,11 +6,11 @@
     { "d": "2026-11-03", "t": "12:30", "m": "學餐", "type": "expense", "cat": "food.lunch", "acc": "EasyCard", "amt": "95", "src": "web" },
     { "d": "2026-11-03", "t": "08:10", "m": "美而美", "type": "expense", "cat": "food.breakfast", "acc": "Wallet_TWD", "amt": "65", "src": "iphone_shortcut" },
     { "d": "2026-11-02", "t": "21:10", "m": "7-ELEVEN", "type": "expense", "cat": "food.snack", "acc": "EasyCard", "amt": "95", "src": "iphone_shortcut" },
-    { "d": "2026-11-02", "t": "10:00", "m": "生活費", "type": "income", "cat": "income.allowance", "acc": "ESunBank", "amt": "3500", "src": "auto", "rule": "r_allowance" },
+    { "d": "2026-11-02", "t": "10:00", "m": "生活費", "type": "income", "cat": "income.allowance", "acc": "ESunBank", "amt": "3000", "src": "auto", "rule": "r_allowance" },
     { "d": "2026-11-02", "t": "09:00", "m": "Spotify", "type": "expense", "cat": "subscription.streaming", "acc": "Cube_Card", "amt": "149", "src": "auto", "tags": ["t_recur"] },
     { "d": "2026-11-01", "t": "19:30", "m": "巷口麵店", "type": "expense", "cat": "food.dinner", "acc": "Wallet_TWD", "amt": "320", "src": "web", "note": "牛肉麵＋小菜" },
     { "d": "2026-11-01", "t": "14:00", "m": "高鐵 台北→台中", "type": "expense", "cat": "transport.hsr", "acc": "Cube_Card", "amt": "1490", "src": "web", "tags": ["t_home"] },
-    { "d": "2026-11-01", "t": "09:00", "m": "家教打工", "type": "income", "cat": "income.parttime", "acc": "ESunBank", "amt": "4000", "src": "web" },
+    { "d": "2026-11-01", "t": "09:00", "m": "家教打工", "type": "income", "cat": "income.parttime", "acc": "ESunBank", "amt": "4500", "src": "web" },
 
     { "d": "2026-10-31", "t": "20:15", "m": "Uber Eats", "type": "expense", "cat": "food.dinner", "acc": "ESun_Unicard", "amt": "268", "src": "moze_import" },
     { "d": "2026-10-30", "t": "16:40", "m": "誠品書店", "type": "expense", "cat": "learning.books", "acc": "ESun_Unicard", "amt": "420", "src": "moze_import" },

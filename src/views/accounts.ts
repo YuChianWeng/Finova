@@ -49,7 +49,7 @@ export function balanceOf(s: L.AccountSummary): { money: L.Money | null; snapsho
   if (s.balance.latest_snapshot) return { money: s.balance.latest_snapshot.amount, snapshot: true };
   return { money: null, snapshot: false };
 }
-/** 依符號約定顯示：信用卡、負債的負數 → 「欠款 NT$ 6,354」 */
+/** 依符號約定顯示：信用卡、負債的負數 → 「欠款 NT$ 3,870」 */
 export function balanceHTML(s: L.AccountSummary, big = false) {
   const { money, snapshot } = balanceOf(s);
   if (!money) return `<span class="xs mu">尚未設定期初</span>`;

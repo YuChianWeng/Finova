@@ -8,9 +8,9 @@ describe("mock 資料與 DESIGN-BRIEF §8 一致", () => {
   it("帳戶餘額", () => {
     const a = get("/accounts");
     const bal = Object.fromEntries(a.groups.flatMap((g: any) => g.accounts).map((x: any) => [x.account_key, x.balance.computed?.amount ?? null]));
-    expect(bal).toMatchObject({ Wallet_TWD: "1240", ESunBank: "24549", LineBank: "8300", Cathay_Sub: "5120", Cube_Card: "-6354", ESun_Unicard: "-1230", EasyCard: "386", Policy_Loan: "-200000", Binance_USDT: null });
-    expect(a.totals.available_cash).toEqual({ TWD: "39595", USDT: "111.13" });
-    expect(a.totals.credit_card_due).toEqual({ TWD: "7584" });
+    expect(bal).toMatchObject({ Wallet_TWD: "1240", ESunBank: "18260", LineBank: "8300", Digital_Sub: "5120", Cube_Card: "-3870", ESun_Unicard: "-1230", EasyCard: "386", Student_Loan: "-50000", Binance_USDT: null });
+    expect(a.totals.available_cash).toEqual({ TWD: "33306", USDT: "85.36" });
+    expect(a.totals.credit_card_due).toEqual({ TWD: "5100" });
     expect(a.investments.find((i: any) => i.account_key === "Firstrade_USD").is_stale).toBe(true);
   });
   it("11 月 KPI 與 10 月同期比較", () => {

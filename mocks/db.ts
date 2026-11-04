@@ -191,8 +191,8 @@ function generate() {
       });
     });
     // 收入：每月 2 日生活費 3,500（自動入帳）＋打工／獎學金
-    addRow({ type: "income", direction: "in", amount: 3500, date: `${m}-02`, time: "10:00", account_key: "ESunBank", category_key: "income.allowance", merchant: "生活費", source: "auto", recurring_rule_id: "r_allowance" });
-    let restInc = inc - 3500;
+    addRow({ type: "income", direction: "in", amount: 3000, date: `${m}-02`, time: "10:00", account_key: "ESunBank", category_key: "income.allowance", merchant: "生活費", source: "auto", recurring_rule_id: "r_allowance" });
+    let restInc = inc - 3000;
     if (inc >= 18000) { addRow({ type: "income", direction: "in", amount: 5000, date: `${m}-18`, time: "09:00", account_key: "ESunBank", category_key: "income.scholarship", merchant: "書卷獎學金", source: m < "2026-10" ? "moze_import" : "web" }); restInc -= 5000; }
     if (restInc > 0) addRow({ type: "income", direction: "in", amount: restInc, date: `${m}-10`, time: "09:00", account_key: "ESunBank", category_key: "income.parttime", merchant: "家教打工", source: m < "2026-10" ? "moze_import" : "web" });
     // 補錢到現金／LINE／悠遊卡（等於本月在那些帳戶的支出，四捨五入到百）、卡費、存到子帳戶、定期定額
@@ -204,9 +204,9 @@ function generate() {
     if (spent.EasyCard) addTransfer({ type: "transfer", from: "ESunBank", to: "LineBank", out: up(spent.EasyCard), date: `${m}-05`, time: "12:30", merchant: "轉到 LINE Bank", source: src });
     if (m !== "2026-10" && spent.Cube_Card) addTransfer({ type: "credit_card_payment", from: "ESunBank", to: "Cube_Card", out: spent.Cube_Card, date: `${m}-28`, time: "09:30", merchant: "繳 Cube 卡費", source: src });
     if (spent.ESun_Unicard && m !== "2026-10") addTransfer({ type: "credit_card_payment", from: "ESunBank", to: "ESun_Unicard", out: spent.ESun_Unicard, date: `${m}-27`, time: "09:30", merchant: "繳 Unicard 卡費", source: src });
-    addTransfer({ type: "transfer", from: "ESunBank", to: "Cathay_Sub", out: 500, date: `${m}-05`, time: "09:00", merchant: "轉入生活子帳戶", source: "auto" });
+    addTransfer({ type: "transfer", from: "ESunBank", to: "Digital_Sub", out: 500, date: `${m}-05`, time: "09:00", merchant: "轉入生活子帳戶", source: "auto" });
     addRow({ type: "investment_settlement", direction: "out", amount: 3000, date: `${m}-08`, time: "09:00", account_key: "ESunBank", merchant: "定期定額 0050 交割", source: "auto" });
-    addRow({ type: "loan_interest_payment", direction: "out", amount: 433, date: `${m}-15`, time: "09:00", account_key: "ESunBank", merchant: "保單借款利息", source: "auto" });
+    addRow({ type: "loan_interest_payment", direction: "out", amount: 120, date: `${m}-15`, time: "09:00", account_key: "ESunBank", merchant: "學貸利息", source: "auto" });
   });
   // 固定交易（DESIGN-BRIEF §8 與契約 §7）
   (txFx.fixed as any[]).forEach((f) => {
