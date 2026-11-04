@@ -17,18 +17,20 @@ const LIAB: L.AccountGroup[] = ["credit_card", "liability"];
 const GROUP_LABEL: Partial<Record<L.AccountGroup, string>> = { cash: "生活現金", bank: "銀行", credit_card: "信用卡", stored_value: "儲值卡／電子票證", liability: "負債", receivable: "應收", other: "其他" };
 
 /* ------------------------------------------------------------ 帳戶總覽 */
-type AccData = { acc: L.AccountsResponse; flow: { labels: string[]; inn: number[]; out: number[] } };
+type AccData = { acc: L.AccountsResponse; flow: { labels: string[]; inn: number[]; out: number[]; last: { inn: string; out: string } } };
 async function loadAccounts(): Promise<AccData> {
   const t = today();
   const flowP = async (): Promise<AccData["flow"]> => {
     if (ui.accPeriod === "week") {
       const weeks = Array.from({ length: 10 }, (_, i) => isoWeek(addDays(t, -7 * (9 - i))));
       const reps = await Promise.all(weeks.map((w) => api.weekly(w, { compare: false })));
-      return { labels: weeks.map((w) => "W" + w.slice(-2)), inn: reps.map((r) => num(twd(r.kpi.income))), out: reps.map((r) => num(twd(r.kpi.expense))) };
+      const lr = reps[reps.length - 1];
+      return { labels: weeks.map((w) => "W" + w.slice(-2)), inn: reps.map((r) => num(twd(r.kpi.income))), out: reps.map((r) => num(twd(r.kpi.expense))), last: { inn: twd(lr?.kpi.income), out: twd(lr?.kpi.expense) } };
     }
     const m = monthOf(t), from = `${addMonths(m, -5)}-01`;
     const r = await api.range(from, monthEnd(m), { compare: false });
-    return { labels: r.series.map((p) => +p.date.slice(5, 7) + "月"), inn: r.series.map((p) => num(p.income)), out: r.series.map((p) => num(p.expense)) };
+    const lp = r.series[r.series.length - 1];
+    return { labels: r.series.map((p) => +p.date.slice(5, 7) + "月"), inn: r.series.map((p) => num(p.income)), out: r.series.map((p) => num(p.expense)), last: { inn: lp?.income ?? "0", out: lp?.expense ?? "0" } };
   };
   const [acc, flow] = await Promise.all([api.accounts(true), flowP()]);
   return { acc, flow };
@@ -93,12 +95,12 @@ function renderAccounts(d: AccData) {
     const cols = ["var(--c4)", "var(--c2)", "var(--c1)", "var(--c5)", "var(--c3)", "var(--c6)"];
     const items = a.groups.filter((g) => !LIAB.includes(g.group)).map((g, i) => {
       const v = g.accounts.map((s) => balanceOf(s).money).filter((m): m is L.Money => !!m && m.currency === "TWD" && sign(m.amount) > 0).reduce((t, m) => add(t, m.amount), "0");
-      return { k: g.group, label: GROUP_LABEL[g.group] ?? g.group, v: num(v), c: cols[i % cols.length] };
+      return { k: g.group, label: GROUP_LABEL[g.group] ?? g.group, amt: v, v: num(v), c: cols[i % cols.length] };
     });
     const inv = a.investments.filter((i) => i.market_value.currency === "TWD").reduce((t, i) => add(t, i.market_value.amount), "0");
-    if (sign(inv) > 0) items.push({ k: "investment", label: "投資", v: num(inv), c: "var(--c5)" });
+    if (sign(inv) > 0) items.push({ k: "investment", label: "投資", amt: inv, v: num(inv), c: "var(--c5)" });
     const shown = items.filter((x) => x.v > 0); const t = shown.reduce((s, x) => s + x.v, 0) || 1;
-    pie = `<div class="card" style="margin-top:12px"><div class="ch"><h2 class="h2">資產分組占比 · TWD</h2><button class="ibtn bare" data-a="acc-pie" data-v="group" aria-label="關閉">${ic("x")}</button></div><div class="donut-wrap">${donut(shown, "資產")}<div class="leg">${shown.map((x) => `<button data-a="toast" data-msg="${esc(x.label)} ${fmt(String(x.v))}"><i class="dotc" style="background:${x.c}"></i>${esc(x.label)}<span class="p">${(x.v / t * 100).toFixed(1)}%</span><span class="num sm">${fmt(String(x.v))}</span></button>`).join("")}</div></div></div>`;
+    pie = `<div class="card" style="margin-top:12px"><div class="ch"><h2 class="h2">資產分組占比 · TWD</h2><button class="ibtn bare" data-a="acc-pie" data-v="group" aria-label="關閉">${ic("x")}</button></div><div class="donut-wrap">${donut(shown, "資產")}<div class="leg">${shown.map((x) => `<button data-a="toast" data-msg="${esc(x.label)} ${fmt(x.amt)}"><i class="dotc" style="background:${x.c}"></i>${esc(x.label)}<span class="p">${(x.v / t * 100).toFixed(1)}%</span><span class="num sm">${fmt(x.amt)}</span></button>`).join("")}</div></div></div>`;
   } else if (ui.accPie === "cur") {
     const cash = byCurrency(a.totals.available_cash), card = a.totals.credit_card_due, liab = a.totals.liabilities;
     const curs = [...new Set([...cash.map((m) => m.currency), ...Object.keys(card), ...Object.keys(liab), ...a.investments.map((i) => i.market_value.currency)])].sort((x, y) => (x === "TWD" ? -1 : y === "TWD" ? 1 : x.localeCompare(y)));
@@ -106,10 +108,10 @@ function renderAccounts(d: AccData) {
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>幣別</th><th class="r">可用現金</th><th class="r">投資</th><th class="r">欠款</th></tr></thead><tbody>${curs.map((c) => `<tr><td>${esc(c)}</td><td class="r num">${a.totals.available_cash[c] ? fmt(a.totals.available_cash[c], c) : "—"}</td><td class="r num">${a.investments.filter((i) => i.market_value.currency === c).map((i) => fmt(i.market_value.amount, c)).join("<br>") || "—"}</td><td class="r num">${card[c] || liab[c] ? fmt(add(card[c] ?? "0", liab[c] ?? "0"), c) : "—"}</td></tr>`).join("")}</tbody></table></div>
       <p class="xs mu" style="margin:10px 0 0">不同幣別分開計算，不會換算或相加。</p></div>`;
   }
-  const { labels, inn, out } = d.flow;
+  const { labels, inn, out, last } = d.flow;
   let v = num(h.net); const line = [v]; for (let i = labels.length - 1; i > 0; i--) { v -= inn[i] - out[i]; line.unshift(v); }
   const n = labels.length - 1;
-  const chart = `<div class="card" style="margin-top:16px">${comboChart(labels, inn, out, line)}<div class="between" style="margin-top:12px;flex-wrap:wrap"><span class="row sm"><span class="led"></span><b class="num">${labels[n]}</b><span class="mu">收入 <span class="num">+${fmt(String(inn[n]))}</span> · 支出 <span class="num">${MINUS}${fmt(String(out[n]))}</span></span></span><div class="seg" role="group" aria-label="統計週期"><button data-a="acc-period" data-v="week" aria-pressed="${ui.accPeriod === "week"}">${ic("cal", "s")} 按週</button><button data-a="acc-period" data-v="month" aria-pressed="${ui.accPeriod === "month"}">按月</button></div></div><p class="xs mu" style="margin:6px 0 0">淨資產線由目前總額依每期收支回推，不含投資市值變動。</p></div>`;
+  const chart = `<div class="card" style="margin-top:16px">${comboChart(labels, inn, out, line)}<div class="between" style="margin-top:12px;flex-wrap:wrap"><span class="row sm"><span class="led"></span><b class="num">${labels[n]}</b><span class="mu">收入 <span class="num">+${fmt(last.inn)}</span> · 支出 <span class="num">${MINUS}${fmt(last.out)}</span></span></span><div class="seg" role="group" aria-label="統計週期"><button data-a="acc-period" data-v="week" aria-pressed="${ui.accPeriod === "week"}">${ic("cal", "s")} 按週</button><button data-a="acc-period" data-v="month" aria-pressed="${ui.accPeriod === "month"}">按月</button></div></div><p class="xs mu" style="margin:6px 0 0">淨資產線由目前總額依每期收支回推，不含投資市值變動。</p></div>`;
   const groups = a.groups.map((g) => `<details class="grp" open><summary><span class="sgn" aria-hidden="true"></span>${esc(GROUP_LABEL[g.group] ?? GROUP_TEXT[g.group])} (${g.accounts.length})<span class="num">${groupTotal(g.accounts)}</span></summary><div>${g.accounts.map((s) => accRow(s)).join("")}</div></details>`).join("");
   const inv = a.investments.length ? `<details class="grp" open><summary><span class="sgn" aria-hidden="true"></span>投資 (${a.investments.length})<span class="num">${byCurrency(a.investments.reduce<Record<string, string>>((o, i) => ({ ...o, [i.market_value.currency]: add(o[i.market_value.currency] ?? "0", i.market_value.amount) }), {})).map((m) => "+" + fmt(m.amount, m.currency)).join(" · ")}</span></summary><div>${a.investments.map(invRow).join("")}</div></details>` : "";
   const arch = a.archived.length ? `<details class="grp"><summary><span class="sgn" aria-hidden="true"></span>已封存 (${a.archived.length})<span class="num">${groupTotal(a.archived) || ""}</span></summary><div>${a.archived.map((s) => accRow(s, true)).join("")}</div></details>` : "";

@@ -1,7 +1,7 @@
 /** 預算（/finance/budgets）、專案（/finance/projects[/id]）、存錢目標（/finance/goals[/id]）。 */
 import type * as L from "../types/ledger";
 import { $, $$, esc, ic } from "../lib/dom";
-import { fmt, MINUS, num, pct1, sign, abs, curInfo, byCurrency } from "../lib/money";
+import { fmt, MINUS, num, pct1, sign, abs, curInfo, byCurrency, add, sub, cmp } from "../lib/money";
 import { today, md, slash, monthOf, monthLabel, addMonths, daysInMonth, daysBetween, monthStart, monthEnd } from "../lib/dates";
 import { app, ui, findCat } from "../state";
 import { api } from "../api/ledger";
@@ -27,7 +27,7 @@ function renderBudget(d: BD) {
   if (!b.lines.length && !b.total && !ui.budEdit) return tabs("month") + nav + `<div class="card">${emptyState("尚未設定預算", "可以用過去 3 個月的平均花費，一鍵建立各分類的月預算。", `<div class="row" style="justify-content:center;flex-wrap:wrap"><button class="btn p" data-a="bud-suggest">用過去 3 個月平均快速建立</button><button class="btn" data-a="bud-edit">手動設定</button></div>`)}</div>`;
   const T = b.total, isCur = month === monthOf(today());
   const totalCard = T ? `<div class="card sp-4"><div class="ch"><h2 class="h2">${monthLabel(month).slice(5)}總預算</h2>${stPill(fromBudget(T.status))}</div><div class="huge">${fmt(T.remaining)}</div><p class="sm mu" style="margin:2px 0 12px">剩餘 · 已用 ${fmt(T.used)} / ${fmt(T.limit)}（${pct1(T.ratio)}）</p>${pbar(T.ratio, fromBudget(T.status))}
-      ${isCur && num(T.projected) > num(T.limit) ? `<div class="callout warn" style="margin-top:14px">${ic("alert")}<div>照目前速度，月底預估支出 <b class="num">${fmt(T.projected)}</b>，會超出預算 <b class="num">${fmt(String(num(T.projected) - num(T.limit)))}</b>。</div></div>` : isCur ? `<p class="xs mu" style="margin:12px 0 0">月底預估 ${fmt(T.projected)} · 剩 ${daysInMonth(month) - +today().slice(8)} 天</p>` : ""}
+      ${isCur && cmp(T.projected, T.limit) > 0 ? `<div class="callout warn" style="margin-top:14px">${ic("alert")}<div>照目前速度，月底預估支出 <b class="num">${fmt(T.projected)}</b>，會超出預算 <b class="num">${fmt(sub(T.projected, T.limit))}</b>。</div></div>` : isCur ? `<p class="xs mu" style="margin:12px 0 0">月底預估 ${fmt(T.projected)} · 剩 ${daysInMonth(month) - +today().slice(8)} 天</p>` : ""}
       ${!b.total_is_sum_of_categories ? `<p class="xs mu" style="margin:10px 0 0">總預算和分類預算加總不同，以總預算為準。</p>` : ""}</div>` : `<div class="card sp-4"><p class="sm mu">沒有設定月總預算。</p></div>`;
   const subs = (key: string | null) => m.categories.find((c) => c.category_key === key)?.children ?? [];
   let lines: string;
@@ -61,13 +61,13 @@ async function loadProjects(r: Route): Promise<PD> {
 }
 function renderProjects(d: PD) {
   const groups: [string, L.Project[]][] = [["進行中", d.list.filter((x) => x.status === "active")], ["即將開始", d.list.filter((x) => x.status === "planned")], ["已結束", d.list.filter((x) => x.status === "closed" || x.status === "archived")]];
-  const tw = (p: L.Project) => { const b = p.budgets.find((x) => x.currency === "TWD"); return { lim: num(b?.total ?? "0"), spent: num(p.spent.TWD ?? "0") }; };
-  const list = `<div class="stack">${groups.map(([h, ps]) => `<div><p class="eyebrow" style="margin-bottom:8px">${h}</p>${ps.length ? ps.map((x) => { const t = tw(x); return `<a class="card tap" style="margin-bottom:8px;display:block;text-decoration:none;color:var(--tx);${x.project_id === d.p?.project_id ? "border-color:var(--ac)" : ""}" href="${href("/projects/" + x.project_id)}"><div class="between"><b style="font-weight:500">${esc(x.name)}</b><span class="xs mu num">${md(x.start_date)}–${md(x.end_date)}</span></div>${t.lim ? `<div class="between num xs mu" style="margin:6px 0"><span>${fmt(String(t.spent))} / ${fmt(String(t.lim))}</span><span>${pct1(t.spent / t.lim)}</span></div>${pbar(t.spent / t.lim, x.status === "closed" ? "done" : null, true)}` : ""}</a>`; }).join("") : `<p class="sm mu" style="margin:0 0 8px">目前沒有${h}的專案</p>`}</div>`).join("")}<button class="btn wide" data-a="proj-new">${ic("plus")}建立專案</button></div>`;
+  const tw = (p: L.Project) => { const b = p.budgets.find((x) => x.currency === "TWD"); const limS = b?.total ?? "0", spentS = p.spent.TWD ?? "0"; return { lim: num(limS), spent: num(spentS), limS, spentS }; };
+  const list = `<div class="stack">${groups.map(([h, ps]) => `<div><p class="eyebrow" style="margin-bottom:8px">${h}</p>${ps.length ? ps.map((x) => { const t = tw(x); return `<a class="card tap" style="margin-bottom:8px;display:block;text-decoration:none;color:var(--tx);${x.project_id === d.p?.project_id ? "border-color:var(--ac)" : ""}" href="${href("/projects/" + x.project_id)}"><div class="between"><b style="font-weight:500">${esc(x.name)}</b><span class="xs mu num">${md(x.start_date)}–${md(x.end_date)}</span></div>${t.lim ? `<div class="between num xs mu" style="margin:6px 0"><span>${fmt(t.spentS)} / ${fmt(t.limS)}</span><span>${pct1(t.spent / t.lim)}</span></div>${pbar(t.spent / t.lim, x.status === "closed" ? "done" : null, true)}` : ""}</a>`; }).join("") : `<p class="sm mu" style="margin:0 0 8px">目前沒有${h}的專案</p>`}</div>`).join("")}<button class="btn wide" data-a="proj-new">${ic("plus")}建立專案</button></div>`;
   const p = d.p;
   if (!p) return tabs("proj") + `<div class="grid"><div class="sp-4">${list}</div><div class="sp-8"><div class="card">${emptyState("還沒有專案", "旅行、活動等可以建立專案，獨立追蹤預算。")}</div></div></div>`;
   const budgets = p.budgets.filter((b) => b.total).map((b) => {
-    const spent = num(p.spent[b.currency] ?? "0"), lim = num(b.total!);
-    return `<div style="margin-top:10px"><div class="between num xs mu"><span>${esc(curInfo(b.currency).name)} 預算 ${fmt(b.total!, b.currency)}</span><span>已花 ${fmt(String(spent), b.currency)} · ${pct1(spent / lim)}</span></div><div style="margin-top:6px">${pbar(spent / lim, p.status === "closed" ? "done" : null)}</div></div>`;
+    const spentS = p.spent[b.currency] ?? "0", spent = num(spentS), lim = num(b.total!);
+    return `<div style="margin-top:10px"><div class="between num xs mu"><span>${esc(curInfo(b.currency).name)} 預算 ${fmt(b.total!, b.currency)}</span><span>已花 ${fmt(spentS, b.currency)} · ${pct1(spent / lim)}</span></div><div style="margin-top:6px">${pbar(spent / lim, p.status === "closed" ? "done" : null)}</div></div>`;
   }).join("");
   const days = Array.from({ length: p.days_total }, (_, i) => { const x = new Date(p.start_date + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + i); return x.toISOString().slice(0, 10); });
   const daily = days.map((dd) => num(p.series.find((s) => s.date === dd)?.amount.TWD ?? "0"));
@@ -77,13 +77,13 @@ function renderProjects(d: PD) {
     : `<div class="panel-tot"><div><span class="eyebrow">已花</span>${byCurrency(p.spent).map((m) => `<span class="amt">${fmt(m.amount, m.currency)}</span>`).join("")}</div><div><span class="eyebrow">剩餘</span>${byCurrency(p.remaining).map((m) => `<span class="amt">${fmt(m.amount, m.currency)}</span>`).join("") || "—"}</div><div><span class="eyebrow">每日可用</span>${p.per_day_available ? byCurrency(p.per_day_available).map((m) => `<span class="amt">${fmt(m.amount, m.currency)}</span>`).join("") : "—"}<span class="xs mu">剩餘 ÷ ${p.days_left} 天</span></div></div>`;
   const tw0 = tw(p);
   const status = ended ? `<span class="st done">${ic("check", "s")}已結束</span>` : p.status === "planned" ? `<span class="st neu">${daysBetween(today(), p.start_date)} 天後開始</span>` : `<span class="st ok">進行中 · 剩 ${p.days_left} 天</span>`;
-  const items = p.categories.map((c) => ({ k: c.category_key, label: c.name, v: num(c.amount), c: catColor(c.category_key, c.icon) }));
+  const items = p.categories.map((c) => ({ k: c.category_key, label: c.name, amt: c.amount, v: num(c.amount), c: catColor(c.category_key, c.icon) }));
   const det = `<div class="card"><div class="ch"><h2 class="h2">${ic("plane")}${esc(p.name)}</h2>${status}</div>
     <p class="sm mu num" style="margin:-6px 0 12px">${slash(p.start_date)}–${slash(p.end_date)} · ${p.days_total} 天${p.count_in_monthly_budget ? " · 計入每月預算" : " · 不計入每月預算"}${p.note ? " · " + esc(p.note) : ""}</p>
     ${head}${budgets}${p.budgets.length > 1 ? '<p class="xs mu" style="margin:6px 0 0">不同幣別分開計算，不混加。</p>' : ""}
-    ${ended && tw0.lim ? `<p class="callout ${tw0.spent <= tw0.lim ? "ok" : "warn"}" style="margin:16px 0 0">${ic(tw0.spent <= tw0.lim ? "check" : "alert")}${tw0.spent <= tw0.lim ? "比預算少花 " + fmt(String(tw0.lim - tw0.spent)) : "超出預算 " + fmt(String(tw0.spent - tw0.lim))}</p>` : ""}
+    ${ended && tw0.lim ? (() => { const under = cmp(tw0.spentS, tw0.limS) <= 0; return `<p class="callout ${under ? "ok" : "warn"}" style="margin:16px 0 0">${ic(under ? "check" : "alert")}${under ? "比預算少花 " + fmt(sub(tw0.limS, tw0.spentS)) : "超出預算 " + fmt(sub(tw0.spentS, tw0.limS))}</p>`; })() : ""}
     <p class="eyebrow" style="margin:20px 0 6px">${ended ? "旅程每日花費" : "期間每日花費"}</p>${barsChart(daily, days.map((x) => md(x)), { label: "專案每日花費" })}${!ended && daily.every((v) => !v) ? '<p class="xs mu" style="margin:4px 0 0">開始後每天的花費會顯示在這裡。</p>' : ""}
-    ${items.length ? `<div class="donut-wrap" style="margin-top:16px">${donut(items, "分類")}<div class="leg">${items.map((x) => `<a href="${href(`/transactions?projects=${p.project_id}&categories=${x.k}`)}" style="text-decoration:none;color:inherit"><i class="dotc" style="background:${x.c}"></i>${esc(x.label)}<span class="num sm">${fmt(String(x.v))}</span></a>`).join("")}</div></div>` : ""}
+    ${items.length ? `<div class="donut-wrap" style="margin-top:16px">${donut(items, "分類")}<div class="leg">${items.map((x) => `<a href="${href(`/transactions?projects=${p.project_id}&categories=${x.k}`)}" style="text-decoration:none;color:inherit"><i class="dotc" style="background:${x.c}"></i>${esc(x.label)}<span class="num sm">${fmt(x.amt)}</span></a>`).join("")}</div></div>` : ""}
     <div class="between" style="margin:20px 0 6px"><p class="eyebrow">這個專案的明細</p><a class="btn sm" href="${href("/transactions")}" title="在明細用「批次」→「歸入專案」">${ic("plus", "s")}從明細批次加入</a></div>
     ${d.tx.length ? `<div class="list plain">${d.tx.map((t) => txRow(t, { showDate: true })).join("")}</div>` : '<p class="sm mu">還沒有交易</p>'}
     ${!ended ? `<div class="row" style="margin-top:16px;flex-wrap:wrap"><button class="btn" data-a="proj-close" data-id="${p.project_id}">結束專案</button></div>` : ""}</div>`;
@@ -158,9 +158,9 @@ actions({
   async "bud-suggest"() {
     try {
       const s = await api.suggestBudgets(3); const d = currentData<BD>();
-      const total = s.lines.reduce((t, l) => t + num(l.amount), 0);
-      dialog("用過去 3 個月平均建立？", `<div class="tbl-wrap"><table class="tbl"><tbody>${s.lines.map((l) => `<tr><td>${esc(findCat(l.category_key)?.name ?? l.category_key)}</td><td class="r num">${fmt(l.amount)}</td></tr>`).join("")}<tr><td><b>月總預算</b></td><td class="r num"><b>${fmt(String(total))}</b></td></tr></tbody></table></div>`, "建立", async () => {
-        try { await api.putBudgets({ effective_from: d.month, lines: [{ category_key: null, amount: String(total) }, ...s.lines.map((l) => ({ category_key: l.category_key, amount: l.amount }))] }); toast(`已建立 ${s.lines.length} 個分類預算`); reload(); } catch (e) { handleError(e); }
+      const total = add(...s.lines.map((l) => l.amount));
+      dialog("用過去 3 個月平均建立？", `<div class="tbl-wrap"><table class="tbl"><tbody>${s.lines.map((l) => `<tr><td>${esc(findCat(l.category_key)?.name ?? l.category_key)}</td><td class="r num">${fmt(l.amount)}</td></tr>`).join("")}<tr><td><b>月總預算</b></td><td class="r num"><b>${fmt(total)}</b></td></tr></tbody></table></div>`, "建立", async () => {
+        try { await api.putBudgets({ effective_from: d.month, lines: [{ category_key: null, amount: total }, ...s.lines.map((l) => ({ category_key: l.category_key, amount: l.amount }))] }); toast(`已建立 ${s.lines.length} 個分類預算`); reload(); } catch (e) { handleError(e); }
       });
     } catch (e) { handleError(e); }
   },

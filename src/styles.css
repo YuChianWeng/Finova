@@ -1,7 +1,7 @@
 /* Layout: phone-first single column with a bottom tab bar; at 960px and wider, a 236px left rail plus a 12-column content grid (max 1200px). Signal Grid: hairline instrument panels on a 24px measurement grid. */
 :root{
   /* Layout: phone-first single column with a bottom tab bar; at 960px and wider, a 236px left rail plus a 12-column content grid (max 1200px). Soft ledger: calm charcoal (dark) or pale coffee paper (light); income sage, expense dusty rose, transfer amber. */
-  --bg:#151618; --grid:transparent;
+  --bg:#151618; --grid:transparent; --sb:#151618;
   --s1:#1D1E21; --s2:#25272B; --s3:#2E3035;
   --ln:#2A2C30; --ln2:#3A3D43;
   --tx:#ECE8E2; --mu:#9C978F;
@@ -22,7 +22,7 @@
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
-    --bg:#F6F1EA; --grid:transparent;
+    --bg:#F6F1EA; --grid:transparent; --sb:#3A2F28;
     --s1:#FCFAF6; --s2:#F1EAE1; --s3:#E8DFD3;
     --ln:#E6DCCF; --ln2:#D2C3B2;
     --tx:#3A2F28; --mu:#75655A;
@@ -37,7 +37,7 @@
   }
 }
 :root[data-theme="light"]{
-    --bg:#F6F1EA; --grid:transparent;
+    --bg:#F6F1EA; --grid:transparent; --sb:#3A2F28;
     --s1:#FCFAF6; --s2:#F1EAE1; --s3:#E8DFD3;
     --ln:#E6DCCF; --ln2:#D2C3B2;
     --tx:#3A2F28; --mu:#75655A;
@@ -550,3 +550,17 @@ a.chip{text-decoration:none}
 .opt input[type=radio]{width:18px;height:18px;flex:0 0 auto;margin-top:2px}
 .leg a{display:flex;align-items:center;gap:8px;min-height:36px}
 .hide-amt .amt,.hide-amt .big-n,.hide-amt .huge{filter:blur(8px)}
+
+/* 下拉更新（standalone） */
+.ptr{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:60;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--s1);border:1px solid var(--ln2);color:var(--mu);box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-48px);opacity:0;pointer-events:none}
+.ptr.ready{color:var(--ac)}
+.ptr.spin svg{animation:ptr-spin .8s linear infinite}
+@keyframes ptr-spin{to{transform:rotate(-360deg)}}
+html.standalone{overscroll-behavior-y:none}
+/* 主畫面 App 用 black-translucent 狀態列，iOS 狀態列文字固定是白色；淺色主題時把狀態列底色換成深咖啡，文字才看得到 */
+html.standalone body::before{background:var(--sb)}
+
+/* iOS：輸入框字級 < 16px 時聚焦會自動放大畫面（TECH-SPEC §13.1），觸控裝置一律 16px */
+@media (hover:none) and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea,.in{font-size:16px!important}
+}

@@ -1,7 +1,7 @@
 /** 共用元件：交易列、進度條、狀態膠囊、空狀態、錯誤狀態、骨架。 */
 import type * as L from "../types/ledger";
 import { esc, ic } from "../lib/dom";
-import { fmt, MINUS, plain, curInfo } from "../lib/money";
+import { fmt, MINUS, plain, curInfo, byCurrency, sumByCurrency } from "../lib/money";
 import { md, wd, splitDT } from "../lib/dates";
 import { mainCat, ui } from "../state";
 import { LedgerError, ERROR_TEXT } from "../api/client";
@@ -85,9 +85,8 @@ export function txRow(t: L.Transaction, o: RowOpt = {}): string {
 }
 function dayTotals(list: L.Transaction[]) {
   const by = (dir: "in" | "out", type: string) => {
-    const o: Record<string, number> = {};
-    list.filter((t) => t.type === type && t.direction === dir).forEach((t) => (o[t.amount.currency] = (o[t.amount.currency] ?? 0) + Number(t.amount.amount)));
-    return Object.entries(o).map(([c, v]) => fmt(String(v), c));
+    const sums = sumByCurrency(list.filter((t) => t.type === type && t.direction === dir).map((t) => t.amount));
+    return byCurrency(sums).map((m) => fmt(m.amount, m.currency));
   };
   return { ex: by("out", "expense"), inc: by("in", "income") };
 }

@@ -16,6 +16,8 @@ export const app = {
   cachedAt: null as string | null,
   queue: [] as QueueItem[],
   hide: false,
+  /** 開啟來源：從主畫面圖示開啟時 manifest 的 start_url 帶 ?source=pwa */
+  source: "web" as "web" | "pwa",
 };
 
 const CATALOG_TTL = 5 * 60 * 1000;
