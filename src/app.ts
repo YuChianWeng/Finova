@@ -5,6 +5,7 @@ import { current, navigate, back, href, type Route } from "./router";
 import { skeleton, errorState, emptyState } from "./ui/components";
 import { closeSheet, dialogOpen, dlgConfirm, dlgDismiss, runUndo, sheetOpen, toast } from "./ui/overlay";
 import { openRemind, refreshRemind, bindRemind } from "./ui/remind";
+import { onWideChange } from "./lib/layout";
 import { LedgerError } from "./api/client";
 import { api } from "./api/ledger";
 
@@ -18,9 +19,14 @@ export type View<D = any> = {
   after?: (d: D, r: Route) => void;
   back?: string; // 手機版顯示返回鍵，值為後備路徑
   nav?: string;  // 對應哪個導覽項目
+  /** 換頁時不整頁重畫：回傳 true 表示這個 view 自己更新了畫面（例如平板帳戶頁點選帳戶，issue #12） */
+  soft?: (prev: Route, next: Route) => boolean;
 };
 const views: Record<string, View> = {};
 export const registerView = (name: string, v: View) => (views[name] = v);
+export const registered = (name: string) => views[name];
+/** 補上或覆寫已註冊 view 的部分設定（例如平板版面） */
+export const patchView = (name: string, p: Partial<View>) => Object.assign(views[name], p);
 
 type Handler = (el: HTMLElement, e: Event) => void | Promise<void>;
 export const ACT: Record<string, Handler> = {};
@@ -37,14 +43,15 @@ export const currentData = <D>() => page.data as D;
 export const currentRoute = () => page.route!;
 
 /* ------------------------------------------------------------ shell */
+/** 平板／桌面左側圖示導覽列（issue #12）：首頁（概覽）、帳戶、每日明細、報表、預算／專案、對帳、設定；搜尋與＋另外放 */
 const NAV: [string, string, string][] = [
-  ["/accounts", "帳戶總覽", "wallet"], ["", "每日明細", "cal"], ["/transactions", "全部交易", "list"], ["/reports/monthly", "報表", "chart"],
-  ["/budgets", "預算", "target"], ["/reconcile", "對帳", "scale"], ["/settings", "設定", "gear"],
+  ["", "概覽", "home"], ["/accounts", "帳戶", "wallet"], ["/transactions", "每日明細", "list"], ["/reports/monthly", "報表", "chart"],
+  ["/budgets", "預算／專案", "target"], ["/reconcile", "對帳", "scale"], ["/settings", "設定", "gear"],
 ];
 function navKey(r: Route) {
   const v = views[r.name];
   if (v?.nav != null) return v.nav;
-  return ({ overview: "", accounts: "/accounts", account: "/accounts", transactions: "/transactions", transaction: "/transactions", reports: "/reports/monthly",
+  return ({ overview: "", more: "/settings", accounts: "/accounts", account: "/accounts", transactions: "/transactions", transaction: "/transactions", reports: "/reports/monthly",
     budgets: "/budgets", projects: "/budgets", project: "/budgets", goals: "/budgets", goal: "/budgets", reconcile: "/reconcile" } as Record<string, string>)[r.name] ?? "/settings";
 }
 export function effTheme() { const t = document.documentElement.dataset.theme; if (t) return t; return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; }
@@ -53,8 +60,15 @@ export function setTheme(t: string) { if (t === "system") delete document.docume
 export function shell() {
   const r = page.route; if (!r) return;
   const act = navKey(r);
-  $("#railnav")!.innerHTML = NAV.map(([p, l, i]) => `<a href="${href(p || "")}" ${act === p ? 'aria-current="page"' : ""}>${ic(i)}${l}</a>`).join("") +
-    `<div class="sep"></div><a href="/portfolio" data-a="stocks">${ic("trend")}股票<svg class="ic s" style="margin-left:auto" aria-hidden="true"><use href="#i-ext"/></svg></a>`;
+  // 連線狀態：設定圖示上的小點（離線＝橘、有待同步＝藍），文字放進 aria-label／tooltip
+  const syncLabel = !app.online ? "離線中" : app.queue.length ? `${app.queue.length} 筆待同步` : "已連線";
+  const dot = !app.online ? "off" : app.queue.length ? "q" : "";
+  $("#railnav")!.innerHTML = NAV.map(([p, l, i]) => {
+    const lbl = p === "/settings" ? `${l}（${syncLabel}）` : l;
+    return `<a class="rbtn" href="${href(p || "")}" ${act === p ? 'aria-current="page"' : ""} aria-label="${lbl}" data-tip="${lbl}">${ic(i)}${p === "/settings" && dot ? `<span class="rdot ${dot}" aria-hidden="true"></span>` : ""}</a>`;
+  }).join("") +
+    `<button class="rbtn" data-a="search" aria-label="搜尋交易" data-tip="搜尋">${ic("search")}</button>` +
+    `<a class="rbtn" href="/portfolio" data-a="stocks" aria-label="股票（財富儀表板）" data-tip="股票">${ic("trend")}</a>`;
   const more = ["/budgets", "/reconcile", "/settings", "/transactions"].includes(act) || r.name === "more";
   $("#tabbar")!.innerHTML =
     `<a href="${href("/accounts")}" aria-label="帳戶總覽" title="帳戶總覽" ${act === "/accounts" ? 'aria-current="page"' : ""}>${ic("wallet")}</a>` +
@@ -71,8 +85,7 @@ export function shell() {
   const left = v?.back ? `<button class="ibtn round only-m" data-a="back" aria-label="返回">${ic("chev-l")}</button><span class="only-d">${bell}</span>` : bell;
   $("#topin")!.innerHTML = `${left}${center}${r.name === "overview" ? `<span class="only-d">${themeBtn}</span>` : themeBtn}${addD}`;
   banners();
-  const syncLabel = !app.online ? "離線中" : app.queue.length ? `${app.queue.length} 筆待同步` : "已連線";
-  $("#railfoot")!.innerHTML = `<p class="eyebrow"><span class="led" style="${app.online ? "" : "background:var(--wa)"}"></span>${syncLabel}</p>`;
+  $("#railfoot")!.innerHTML = `<button class="rbtn add" data-a="add" aria-label="記一筆" data-tip="記一筆">${ic("plus")}</button>`;
 }
 function banners() {
   const out: string[] = [];
@@ -87,6 +100,8 @@ function banners() {
 /* ------------------------------------------------------------ pages */
 export async function show(r: Route) {
   closeSheet();
+  const prev = page.route, v0 = views[r.name];
+  if (prev && page.status === "ready" && v0?.soft?.(prev, r)) { page.route = r; shell(); return; }
   page.route = r;
   const v = views[r.name];
   const token = ++page.token;
@@ -182,6 +197,8 @@ actions({
 
 export function startEvents() {
   bindRemind();
+  // 跨過 960px 斷點時（iPad 旋轉、調整視窗）改用另一種版面重畫目前頁面
+  onWideChange(() => { if (page.route) show(page.route); });
   document.addEventListener("click", (e) => {
     const el = (e.target as Element).closest?.("[data-a]") as HTMLElement | null; if (!el) return;
     const f = ACT[el.dataset.a!]; if (!f) return;

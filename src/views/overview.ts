@@ -1,14 +1,16 @@
 /** 第二頁：每日明細＋本月總覽（/finance）。資料來自 /overview 與該月的 /transactions。 */
 import type * as L from "../types/ledger";
 import { esc, ic } from "../lib/dom";
-import { fmt, fmtSigned, MINUS, num, pct1, twd, byCurrency, sign, sub, cmp, sumByCurrency } from "../lib/money";
+import { fmt, fmtSigned, MINUS, num, pct1, twd, byCurrency, sign, sub, cmp, sumByCurrency, add, abs, short } from "../lib/money";
+import { dailyTotals, buckets, delta as deltaOf, periodInfo, type Bucket } from "../lib/series";
+import { wide } from "../lib/layout";
 import { today, addDays, daysBetween, dow, wd, md, slash, monthOf, addMonths, daysInMonth, monthStart, monthEnd } from "../lib/dates";
 import { app, ui } from "../state";
 import { api } from "../api/ledger";
 import { registerView, actions, rerender, reload, handleError } from "../app";
 import { href, navigate } from "../router";
 import { txRow, pbar, stPill, fromBudget, catColor, catIconName } from "../ui/components";
-import { dailyChart, donutCard, type Slice } from "../ui/charts";
+import { dailyChart, donutCard, niceMax, type Slice } from "../ui/charts";
 import { openEntry } from "../ui/entry";
 import { toast } from "../ui/overlay";
 import { remindList } from "../ui/remind";
@@ -90,7 +92,8 @@ export function catDonut(cats: L.CategorySlice[], title: string, from: string, t
     extra: `${drill ? `<a class="link" href="${href(`/transactions?categories=${ui.donut}&from=${from}&to=${to}`)}" style="margin-top:8px">看 ${esc(drill)} 的所有明細 ${ic("chev-r", "s")}</a>` : ""}<span hidden data-range="${from}|${to}"></span>` });
 }
 
-function render(d: D) {
+/** 手機版與平板版共用的卡片（平板版把月曆移到右欄，其餘卡片放在左主區下方） */
+function parts(d: D) {
   const { o } = d; const sel = ui.cal.sel, t = today();
   const all = [...pendingAsTx(app.queue), ...d.tx];
   const dl = all.filter((x) => x.date === sel).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
@@ -137,14 +140,21 @@ function render(d: D) {
       <a href="${href("/accounts")}" class="between" style="min-height:52px;border-bottom:1px solid var(--ln);text-decoration:none;color:var(--tx)"><span>信用卡應繳合計</span><span class="stack" style="gap:0;text-align:right">${byCurrency(A.totals.credit_card_due).map((m) => `<span class="amt out">欠款 ${fmt(m.amount, m.currency)}</span>`).join("") || '<span class="amt">—</span>'}</span></a>
       ${A.investments.map((i) => `<div class="between" style="min-height:52px;border-bottom:1px solid var(--ln)"><span>${esc(i.name)}<br><a class="link" href="${esc(i.link)}" data-a="stocks">到股票區 ${ic("ext", "s")}</a>${i.is_stale ? ' <span class="st warn">! 未更新</span>' : ""}</span><span class="amt pos">${fmt(i.market_value.amount, i.market_value.currency)}</span></div>`).join("")}
     </div></div>`;
-  return `<div class="ov">${calCard}<div class="ov-r"><div class="kpis two" aria-label="本月概況">${kpis}</div>${budCard}${remCard}</div></div>
-  <div class="grid" style="margin-top:16px">${chartCard}<div class="sp-4">${catDonut(o.categories, `${mm}分類占比`, monthStart(o.month), monthEnd(o.month))}</div>${projCard}${goalsCard}${accCard}</div>`;
+  const donutHTML = catDonut(o.categories, `${mm}分類占比`, monthStart(o.month), monthEnd(o.month));
+  return { calendar: calendar(all), daySum, dayList, calCard, kpis, budCard, remCard, chartCard, donutHTML, projCard, goalsCard, accCard, mm };
+}
+function render(d: D) {
+  const p = parts(d);
+  return `<div class="ov">${p.calCard}<div class="ov-r"><div class="kpis two" aria-label="本月概況">${p.kpis}</div>${p.budCard}${p.remCard}</div></div>
+  <div class="grid" style="margin-top:16px">${p.chartCard}<div class="sp-4">${p.donutHTML}</div>${p.projCard}${p.goalsCard}${p.accCard}</div>`;
 }
 
 registerView("overview", {
-  load, render, nav: "",
-  title: () => "每日明細",
-  header: () => `<div class="grow ctr"><button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><h1 class="ttl num">${slash(ui.cal.sel)}</h1><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button>${ui.cal.sel !== today() ? `<button class="chip today-chip" data-a="cal-today" aria-label="回到今天（${slash(today())}）">今天</button>` : ""}</div><button class="ibtn round" data-a="search" aria-label="搜尋交易">${ic("search")}</button>`,
+  load: () => (wide() ? loadWide() : load()),
+  render: (d: D) => (wide() && "rows" in d ? renderWide(d as W) : render(d)),
+  nav: "",
+  title: () => (wide() ? "概覽" : "每日明細"),
+  header: () => wide() ? overviewWideHeader() : `<div class="grow ctr"><button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><h1 class="ttl num">${slash(ui.cal.sel)}</h1><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button>${ui.cal.sel !== today() ? `<button class="chip today-chip" data-a="cal-today" aria-label="回到今天（${slash(today())}）">今天</button>` : ""}</div><button class="ibtn round" data-a="search" aria-label="搜尋交易">${ic("search")}</button>`,
 });
 
 function calMove(k: number) {
@@ -172,4 +182,137 @@ actions({
     catch (e) { handleError(e); }
   },
   async "occ-skip"(el) { try { await api.skipOccurrence(el.dataset.id!, el.dataset.d!); toast("已略過這一期"); reload(); } catch (e) { handleError(e); } },
+});
+
+/* ================================================================ 平板／桌面「概覽」（issue #12，≥ 960px） */
+type W = D & { from: L.ISODate; to: L.ISODate; rows: L.Transaction[]; cur: L.TransactionsSummary; prev: L.TransactionsSummary; rec: L.RecurringResponse | null };
+const ovTo = () => ui.ovr.to || today();
+const ovFrom = () => addDays(ovTo(), -(ui.ovr.days - 1));
+async function allTx(q: L.TransactionsQuery) {
+  const rows: L.Transaction[] = []; let cursor: string | undefined;
+  for (let i = 0; i < 15; i++) { const p = await api.transactions({ ...q, limit: 200, cursor }); rows.push(...p.rows); cursor = p.next_cursor ?? undefined; if (!cursor) break; }
+  return rows;
+}
+async function loadWide(): Promise<W> {
+  const to = ovTo(), from = ovFrom(), pTo = addDays(from, -1), pFrom = addDays(pTo, -(ui.ovr.days - 1));
+  const [base, rows, cur, prev, rec] = await Promise.all([
+    load(), allTx({ from, to, types: ["expense", "income"] }),
+    api.transactions({ from, to, limit: 1 }).then((r) => r.summary), api.transactions({ from: pFrom, to: pTo, limit: 1 }).then((r) => r.summary),
+    api.recurring().catch(() => null),
+  ]);
+  return { ...base, from, to, rows, cur, prev, rec };
+}
+/** KPI 卡：大數字＋和上一個同長度區間比較（箭頭、百分比、差額；不只靠顏色） */
+function kpiW(label: string, cur: string, prev: string, kind: "net" | "exp" | "inc") {
+  const d = deltaOf(cur, prev), up = sign(d.change) > 0, flat = sign(d.change) === 0;
+  const good = kind === "exp" ? !up : up;
+  const big = kind === "exp" ? `${MINUS}${fmt(cur)}` : fmtSigned(cur);
+  const cls = kind === "exp" ? "out" : kind === "inc" ? "inc" : sign(cur) >= 0 ? "pos" : "out";
+  const txt = d.ratio == null ? "上期為 0" : `${up ? "▲" : flat ? "＝" : "▼"} ${Math.abs(d.ratio * 100).toFixed(2)}%`;
+  return `<div class="kw"><span class="kw-l">${label}</span><span class="kw-v amt ${cls}">${big}</span>
+    <span class="kw-d ${flat ? "flat" : good ? "good" : "bad"}" aria-label="和上一期相比 ${up ? "增加" : flat ? "持平" : "減少"} ${fmt(abs(d.change))}${d.ratio == null ? "" : "，" + Math.abs(d.ratio * 100).toFixed(2) + "%"}">${txt}<span class="num">（${fmtSigned(d.change).replace("NT$ ", "")}）</span></span></div>`;
+}
+/** 組合圖：收入／支出柱（左軸）＋累積淨額折線與面積（右軸）。點欄位選日期，並同步右側月曆 */
+function comboW(bs: Bucket[], selKey: string | null) {
+  const W0 = 900, H = 260, L0 = 46, R0 = 52, Tp = 14, B0 = 26, iw = W0 - L0 - R0, ih = H - Tp - B0, n = bs.length || 1, bw = iw / n;
+  const inc = bs.map((b) => num(b.inc)), exp = bs.map((b) => num(b.exp)), cum = bs.map((b) => num(b.cum));
+  // 刻度取整：每格是「好看」的數字（1、2、2.5、5 × 10ⁿ）
+  const bStep = niceMax(Math.max(...inc, ...exp, 1) / 4), bm = bStep * 4;
+  const cMin = Math.min(0, ...cum), cMax = Math.max(0, ...cum);
+  // 右軸固定 4 格（和左軸共用格線）：每格放大到能涵蓋最小～最大值為止
+  let lStep = niceMax(Math.max(cMax - cMin, 1) / 4), lo = Math.floor(cMin / lStep) * lStep;
+  while (lo + lStep * 4 < cMax) { lStep = niceMax(lStep * 1.01); lo = Math.floor(cMin / lStep) * lStep; }
+  const hi = lo + lStep * 4;
+  const yb = (v: number) => Tp + ih * (1 - v / bm), yl = (v: number) => Tp + ih * (1 - (v - lo) / (hi - lo));
+  let s = "";
+  for (let i = 0; i <= 4; i++) { const yy = Tp + ih * i / 4; s += `<line class="g" x1="${L0}" x2="${W0 - R0}" y1="${yy}" y2="${yy}"/><text class="ax" x="${L0 - 6}" y="${yy + 3.5}" text-anchor="end">${short(bm * (1 - i / 4))}</text><text class="ax" x="${W0 - R0 + 6}" y="${yy + 3.5}">${short(Math.round(hi - (hi - lo) * i / 4))}</text>`; }
+  const si = bs.findIndex((b) => b.key === selKey);
+  if (si >= 0) s += `<rect class="sel-col" x="${(L0 + si * bw).toFixed(1)}" y="${Tp}" width="${bw.toFixed(1)}" height="${ih}" rx="3"/>`;
+  const pts = cum.map((v, i) => [L0 + (i + 0.5) * bw, yl(v)]);
+  if (pts.length) s += `<path class="lnf" d="M${pts[0][0].toFixed(1)},${(Tp + ih).toFixed(1)} ${pts.map((p) => "L" + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")} L${pts[n - 1][0].toFixed(1)},${(Tp + ih).toFixed(1)}Z"/>`;
+  const step = Math.max(1, Math.ceil(n / 15));
+  bs.forEach((b, i) => {
+    const x = L0 + i * bw, w = Math.max(2, Math.min(14, bw * 0.3));
+    s += `<rect class="bar out" x="${(x + bw / 2 - w - 1).toFixed(1)}" y="${yb(exp[i]).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(exp[i] ? 1 : 0, Tp + ih - yb(exp[i])).toFixed(1)}" rx="1.5"/>`;
+    s += `<rect class="bar inc" x="${(x + bw / 2 + 1).toFixed(1)}" y="${yb(inc[i]).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(inc[i] ? 1 : 0, Tp + ih - yb(inc[i])).toFixed(1)}" rx="1.5"/>`;
+    if (i % step === 0 || i === n - 1) s += `<text class="ax" x="${(x + bw / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" ${i === si ? 'style="fill:var(--tx);font-weight:700"' : ""}>${esc(bucketLabel(b))}</text>`;
+  });
+  if (pts.length) s += `<polyline class="line" points="${pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"/>${si >= 0 ? `<circle class="dot" cx="${pts[si][0].toFixed(1)}" cy="${pts[si][1].toFixed(1)}" r="4.5"/>` : ""}`;
+  // 透明的點擊區（每一欄一個），hover 時在圖例顯示數值
+  s += bs.map((b, i) => `<rect class="hit" x="${(L0 + i * bw).toFixed(1)}" y="${Tp}" width="${bw.toFixed(1)}" height="${ih}" data-a="ov-day" data-d="${b.from}" data-i="${i}"><title>${esc(bucketTitle(b))}</title></rect>`).join("");
+  return `<div class="chart ov-chart"><svg viewBox="0 0 ${W0} ${H}" role="img" aria-label="每${{ day: "日", week: "週", month: "月" }[ui.ovr.gran]}收入與支出（左軸）、累積餘額（右軸）">${s}</svg></div>`;
+}
+const bucketLabel = (b: Bucket) => (ui.ovr.gran === "month" ? `${+b.key.slice(5, 7)}月` : `${+b.from.slice(5, 7)}/${+b.from.slice(8)}`);
+const bucketTitle = (b: Bucket) => `${b.from === b.to ? `${slash(b.from)}（${wd(b.from)}）` : `${md(b.from)}–${md(b.to)}`} 收入 +${fmt(b.inc)} · 支出 ${MINUS}${fmt(b.exp)} · 累積 ${fmtSigned(b.cum)}`;
+
+/** 即將到來：未來的週期交易（GET /recurring 的 upcoming） */
+function upcomingCard(rec: L.RecurringResponse | null) {
+  const t = today();
+  if (!rec) return `<section class="ovw-sec"><div class="ch"><h2 class="h2">即將到來</h2></div><p class="sm mu">無法載入週期交易。</p></section>`;
+  const rules = new Map(rec.rules.map((r) => [r.rule_id, r]));
+  const list = rec.upcoming.filter((o) => o.status === "pending" && o.due_date >= t).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 8);
+  const sgn = (o: L.Occurrence) => (rules.get(o.rule_id)?.template.type === "income" ? o.amount.amount : "-" + o.amount.amount);
+  const tot: Record<string, string> = {};
+  list.forEach((o) => (tot[o.amount.currency] = add(tot[o.amount.currency] ?? "0", sgn(o))));
+  const rows = list.map((o) => {
+    const r = rules.get(o.rule_id), inc = r?.template.type === "income", cat = r?.template.category_key ?? null;
+    const pi = r ? periodInfo(r, o.due_date) : { index: null, remaining: null };
+    const dd = daysBetween(t, o.due_date);
+    const when = dd === 0 ? "今天" : dd === 1 ? "明天" : `${dd} 天後`;
+    return `<a class="up-row" href="${href("/settings/recurring")}"><span class="cat-ic" style="--cc:${catColor(cat)}">${ic(catIconName(cat))}</span><span class="tx-m"><span class="tx-t"><span>${esc(o.rule_name)}</span></span><span class="tx-s">週期 ${pi.index ? "#" + pi.index : "—"} / ${pi.remaining != null ? `剩 ${pi.remaining} 期` : "無限期"}</span></span><span class="up-r"><span class="amt ${inc ? "inc" : "out"}">${inc ? "+" : MINUS}${fmt(o.amount.amount, o.amount.currency)}</span><span class="xs mu">${when}</span></span></a>`;
+  }).join("");
+  const sum = byCurrency(tot).map((m) => fmtSigned(m.amount, m.currency)).join("、");
+  return `<section class="ovw-sec"><div class="ch"><h2 class="h2">即將到來 <span class="cnt" aria-label="${list.length} 筆">${list.length}</span></h2>${list.length ? `<span class="sm mu num">合計 ${sum}</span>` : ""}</div>
+    ${list.length ? `<div class="up-list">${rows}</div>` : `<div class="ovw-empty">${ic("repeat")}<p>沒有即將到來的週期交易</p></div>`}</section>`;
+}
+function notifyCard(alerts: L.Alert[]) {
+  return `<section class="ovw-sec"><div class="ch"><h2 class="h2">通知中心${alerts.length ? ` <span class="cnt">${alerts.length}</span>` : ""}</h2></div>
+    ${alerts.length ? remindList(alerts) : `<div class="ovw-empty"><img src="${LOGO}" alt="" width="56" height="56"><p>目前沒有提醒事項</p></div>`}</section>`;
+}
+function renderWide(d: W) {
+  const p = parts(d), t = today();
+  const all = [...pendingAsTx(app.queue), ...d.rows];
+  const bs = buckets(dailyTotals(all, d.from, d.to), ui.ovr.gran);
+  const sel = ui.cal.sel;
+  const sb = bs.find((b) => sel >= b.from && sel <= b.to) ?? null;
+  const net = sub(twd(d.cur.income), twd(d.cur.expense)), pnet = sub(twd(d.prev.income), twd(d.prev.expense));
+  const others = byCurrency(d.cur.net).filter((m) => m.currency !== "TWD");
+  const kpis = `<div class="kws">${kpiW("餘額", net, pnet, "net")}${kpiW("支出", twd(d.cur.expense), twd(d.prev.expense), "exp")}${kpiW("收入", twd(d.cur.income), twd(d.prev.income), "inc")}</div>
+    ${others.length ? `<p class="xs mu" style="margin:6px 0 0">另有 ${others.map((m) => fmtSigned(m.amount, m.currency)).join("、")}（不同幣別不併入）</p>` : ""}`;
+  const legend = `<div class="ov-leg"><span class="row sm"><span class="led" style="background:var(--ac)"></span><span id="ov-read"><b class="num">${slash(sel)} 週${wd(sel)}</b>${sel === t ? ' <span class="st neu">今天</span>' : ""}</span></span>
+    <span class="row sm"><span class="led" style="background:var(--ac)"></span>${sb ? `餘額 <b class="amt ${sign(sb.cum) >= 0 ? "pos" : "out"}">${fmtSigned(sb.cum)}</b>` : `<span class="mu">選中的日期不在這個區間</span>`}</span>
+    <span class="grow"></span><label class="vh" for="ov-gran">圖表粒度</label><select id="ov-gran" class="in sm ov-gran">${(["day", "week", "month"] as const).map((g) => `<option value="${g}" ${ui.ovr.gran === g ? "selected" : ""}>按${{ day: "日", week: "週", month: "月" }[g]}</option>`).join("")}</select></div>
+    <div class="legend"><span><i class="sw-bar" style="background:var(--exp)"></i>支出（左軸）</span><span><i class="sw-bar" style="background:var(--inc)"></i>收入（左軸）</span><span><i class="sw-line" style="border-color:var(--ac)"></i>累積餘額（右軸）</span></div>`;
+  const main = `<div class="ovw-main">${kpis}<section class="ovw-chart">${comboW(bs, sb?.key ?? null)}${legend}</section>
+    <div class="ovw-two">${notifyCard(d.o.alerts)}${upcomingCard(d.rec)}</div>
+    <h2 class="h2 ovw-more">本月詳情 · ${p.mm}</h2>
+    <div class="ov-r"><div class="kpis two" aria-label="本月概況">${p.kpis}</div>${p.budCard}</div>
+    <div class="grid" style="margin-top:16px">${p.chartCard}<div class="sp-4">${p.donutHTML}</div>${p.projCard}${p.goalsCard}${p.accCard}</div></div>`;
+  const side = `<aside class="ovw-side ${ui.ovr.sideOpen ? "" : "closed"}" aria-label="月曆與當日明細">
+    <div class="ovw-side-h"><button class="ibtn bare only-mid" data-a="ov-side" aria-expanded="${ui.ovr.sideOpen}" aria-label="${ui.ovr.sideOpen ? "收合月曆" : "展開月曆"}">${ic(ui.ovr.sideOpen ? "chev-d" : "chev-r", "s")}</button>
+      <button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><b class="num ovw-date">${slash(sel)}</b><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button>
+      <span class="grow"></span>${sel !== t ? `<button class="chip today-chip" data-a="cal-today" aria-label="回到今天">今天</button>` : ""}
+      <label class="ibtn round ovw-mpick" aria-label="選擇年月" title="選擇年月">${ic("cal")}<input type="month" id="ov-month" value="${ui.cal.month}" aria-label="選擇年月"></label></div>
+    <div class="ovw-side-b">${p.calendar}${p.daySum}${p.dayList}</div></aside>`;
+  return `<div class="ovw">${main}${side}</div>`;
+}
+const LOGO = new URL("../assets/logo-96.png", import.meta.url).href;
+export const overviewWideHeader = () => `<div class="grow ovw-hd"><h1 class="ttl">概覽</h1><div class="rng"><button class="ibtn bare" data-a="ovr-prev" aria-label="上一個區間">${ic("chev-l", "s")}</button><span class="num">${slash(ovFrom())} – ${slash(ovTo())}</span><button class="ibtn bare" data-a="ovr-next" aria-label="下一個區間" ${ovTo() >= today() ? "disabled" : ""}>${ic("chev-r", "s")}</button></div></div>`;
+
+actions({
+  "ovr-prev"() { ui.ovr.to = addDays(ovTo(), -ui.ovr.days); reload(); },
+  "ovr-next"() { const n = addDays(ovTo(), ui.ovr.days); ui.ovr.to = n >= today() ? "" : n; reload(); },
+  "ov-day"(el) { const d = el.dataset.d!; ui.cal.sel = d; if (monthOf(d) !== ui.cal.month) { ui.cal.month = monthOf(d); reload(); } else rerender(); },
+  "ov-side"() { ui.ovr.sideOpen = !ui.ovr.sideOpen; rerender(); },
+});
+document.addEventListener("change", (e) => {
+  const t = e.target as HTMLInputElement;
+  if (t.id === "ov-gran") { ui.ovr.gran = t.value as typeof ui.ovr.gran; rerender(); }
+  if (t.id === "ov-month" && /^\d{4}-\d{2}$/.test(t.value)) { ui.cal.month = t.value; ui.cal.sel = t.value === monthOf(today()) ? today() : monthStart(t.value); reload(); }
+});
+// 圖表 hover：在圖例顯示該欄數值（不重畫）
+document.addEventListener("mouseover", (e) => {
+  const r = (e.target as Element).closest?.(".ov-chart .hit") as SVGRectElement | null; const out = document.getElementById("ov-read");
+  if (!r || !out) return;
+  out.textContent = r.querySelector("title")?.textContent ?? "";
 });

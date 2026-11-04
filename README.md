@@ -10,7 +10,7 @@
   <img src="docs/screenshots/phone-entry-light.webp" width="220" alt="記一筆（淺色）">
 </p>
 
-<p align="center"><img src="docs/screenshots/desktop-daily-dark.webp" width="860" alt="桌面版每日明細"></p>
+<p align="center"><img src="docs/screenshots/desktop-overview-dark.webp" width="860" alt="平板／桌面版概覽"></p>
 
 ---
 
@@ -24,7 +24,7 @@
 
 ### 畫面導覽
 
-手機底部有五個按鈕（桌面版在左側選單）：
+手機底部有五個按鈕（平板和桌面版在左側圖示列）：
 
 | 按鈕 | 頁面 | 做什麼 |
 |---|---|---|
@@ -62,6 +62,16 @@
 - **週期**選「每月」等，儲存後會同時建立週期規則，下一期到了會出現在「待處理」提醒你確認入帳。
 - 應收款項、應付款項、收據照片、常用範本即將推出；餘額調整請從「對帳」建立。
 - 交易列 **往左滑** 可以編輯或刪除；刪除的紀錄 30 天內可在「設定 › 最近刪除」復原。
+
+### 平板與桌面（iPad 橫向、電腦）
+
+畫面寬度 960px 以上會改用平板版面，手機版不變。
+
+- **左側圖示列**：概覽、帳戶、每日明細、報表、預算／專案、對帳、設定、搜尋、股票，最下面的 **＋** 記一筆。滑鼠移上去或用鍵盤選到時會顯示名稱；設定圖示上的小點代表離線（橘色）或有待同步的紀錄（藍色）。
+- **概覽**：最近 30 天的餘額（收入 − 支出）、支出、收入，和前 30 天比較（箭頭、百分比、差額）。下面的圖是每日收支長條加累積餘額折線，可以切換按日／週／月；點某一天，右側月曆會跳到那天並列出當天明細。再下面是「通知中心」和「即將到來」的週期交易，往下捲還有本月預算、分類占比、專案、存錢目標與帳戶摘要。
+- **帳戶**：左邊是帳戶清單，點一個帳戶，中間顯示帳務統計、餘額走勢與帳戶資訊，右邊列出這個月的記錄和每筆記完後的餘額；網址會跟著變，重新整理或分享連結都會停在同一個帳戶。視窗比較窄（960–1179px）時，中間和右邊改成「帳戶資訊／一般記錄」兩個分頁。
+
+<p><img src="docs/screenshots/desktop-accounts-dark.webp" width="860" alt="平板版帳戶頁"></p>
 
 ### 每日明細與全部交易
 
@@ -157,7 +167,9 @@ npm run build                                    # 正式版輸出到 dist/（�
 | `public/sw.js` | Service worker：離線時讀快取（catalog、overview、最近一頁明細） |
 | `public/logo-*.png`、`apple-touch-icon.png`、`icon-maskable-*.png` | App 圖示（一般／iOS／Android 自適應） |
 | `src/ui/ptr.ts` | 主畫面 App 的下拉更新 |
-| `src/ui/remind.ts` | 待處理提醒清單（總覽卡片與鈴鐺面板共用） |
+| `src/ui/remind.ts` | 待處理提醒清單（總覽卡片、鈴鐺面板、平板通知中心共用） |
+| `src/lib/layout.ts` | 960px 斷點；跨過斷點時重畫目前頁面 |
+| `src/lib/series.ts` | 平板概覽與帳戶頁的序列計算（每日收支、累積餘額、上期比較、週期期數；十進位運算） |
 | `deploy/` | 掛到 Next.js（`next-finance.mjs`）或 nginx（`nginx-finance.conf`）的設定範例 |
 | `docs/` | 部署說明、契約修訂提案、README 用的 logo 與截圖 |
 | `mocks/fixtures/*.json` | DESIGN-BRIEF §8 的假資料，加上契約 §7 要求的情境 |

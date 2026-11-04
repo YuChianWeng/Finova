@@ -80,4 +80,8 @@ export const ui = {
   sel: new Set<number>(),
   rec: { step: 1, acc: null as string | null, actual: "", date: today(), err: null as string | null, showTx: false,
     preview: null as L.ReconcilePreview | null, result: null as null | { reconciliation: L.Reconciliation; adjustment: L.Transaction | null } },
+  /** 平板「概覽」（issue #12）：區間結束日（"" = 今天）、天數、圖表粒度、中寬度時月曆是否收合 */
+  ovr: { to: "" as string, days: 30, gran: "day" as "day" | "week" | "month", sideOpen: false },
+  /** 平板帳戶頁（issue #12）：中欄月份（"" = 本月）、中寬度時顯示哪個分頁、右欄檢視 */
+  accW: { month: "" as string, pane: "info" as "info" | "rec", view: "detail" as "list" | "detail" },
 };
