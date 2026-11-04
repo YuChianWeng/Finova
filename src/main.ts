@@ -10,12 +10,14 @@ import { bindChartHover } from "./ui/charts";
 import { restoreDraft } from "./ui/entry";
 import { toast } from "./ui/overlay";
 import { bindPullToRefresh } from "./ui/ptr";
+import { bindScrollHint } from "./lib/layout";
 import "./views/accounts";
 import "./views/overview";
 import "./views/transactions";
 import "./views/reports";
 import "./views/budgets";
 import "./views/reconcile";
+import "./views/statements";
 import "./views/settings";
 
 const MOCK = import.meta.env.VITE_USE_MOCK === "true";
@@ -57,6 +59,7 @@ async function boot() {
 
   startEvents();
   bindChartHover();
+  bindScrollHint();
   // 下拉更新：總覽、帳戶、明細頁（只在主畫面 App 模式啟用）
   const PTR_PAGES = new Set(["overview", "accounts", "account", "transactions"]);
   bindPullToRefresh({ enabled: () => PTR_PAGES.has(current().name), refresh: async () => { await syncQueue(); await reload(); } });

@@ -288,7 +288,7 @@ function renderWide(d: W) {
     <h2 class="h2 ovw-more">本月詳情 · ${p.mm}</h2>
     <div class="ov-r"><div class="kpis two" aria-label="本月概況">${p.kpis}</div>${p.budCard}</div>
     <div class="grid" style="margin-top:16px">${p.chartCard}<div class="sp-4">${p.donutHTML}</div>${p.projCard}${p.goalsCard}${p.accCard}</div></div>`;
-  const side = `<aside class="ovw-side ${ui.ovr.sideOpen ? "" : "closed"}" aria-label="月曆與當日明細">
+  const side = `<aside class="ovw-side ${ui.ovr.sideOpen ? "" : "closed"}" aria-label="月曆與當日明細" tabindex="0">
     <div class="ovw-side-h"><button class="ibtn bare only-mid" data-a="ov-side" aria-expanded="${ui.ovr.sideOpen}" aria-label="${ui.ovr.sideOpen ? "收合月曆" : "展開月曆"}">${ic(ui.ovr.sideOpen ? "chev-d" : "chev-r", "s")}</button>
       <button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><b class="num ovw-date">${slash(sel)}</b><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button>
       <span class="grow"></span>${sel !== t ? `<button class="chip today-chip" data-a="cal-today" aria-label="回到今天">今天</button>` : ""}

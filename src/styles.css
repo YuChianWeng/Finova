@@ -735,7 +735,7 @@ html.standalone body::before{background:var(--sb)}
 
   /* C. 帳戶：master–detail */
   .accw{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr);gap:20px;align-items:start}
-  .accw-l,.accw-m,.accw-x{position:sticky;top:calc(var(--sat) + 84px);max-height:calc(100dvh - var(--sat) - 108px);overflow-y:auto;overscroll-behavior:contain;min-width:0;scrollbar-width:thin}
+  .accw-l,.accw-m,.accw-x{position:sticky;top:calc(var(--sat) + 84px);max-height:calc(100dvh - var(--sat) - 108px);overflow-y:auto;overscroll-behavior:contain;min-width:0}
   .accw-lh,.accw-xh,.accw-mh{display:flex;align-items:center;gap:8px;min-height:44px}
   .accw-lh .h2{flex:1}
   .accw-hero{margin:8px 0 12px;padding:22px 18px;border-radius:20px;color:#fff;text-align:center;display:flex;flex-direction:column;gap:8px;
@@ -808,4 +808,90 @@ html.standalone body::before{background:var(--sb)}
   .accw-mh2 .rng{margin:0}
   .accw-tabs [role=tab][aria-selected="true"]{background:var(--s3);color:var(--tx);font-weight:600}
   .accw-tabs [role=tab]{flex:1}
+}
+
+/* ------------------------------------------------------------ 捲動條（issue #14）
+   只在滑鼠／觸控板的裝置：細（6px）圓角滑塊、透明軌道、沒有箭頭；
+   閒置時隱藏；滑鼠移入該欄或鍵盤焦點在欄內（.sb-on）、捲動中（.is-scrolling）才出現，class 由 lib/layout.ts 的 bindScrollHint 加上。
+   Chrome 121+ 只要設定 scrollbar-width 就忽略 ::-webkit-scrollbar，所以 scrollbar-width／color
+   只放在不支援 ::-webkit-scrollbar 的瀏覽器（Firefox）。觸控裝置維持系統的浮動滑條。 */
+@media (hover:hover) and (pointer:fine){
+  .accw-l,.accw-m,.accw-x,.ovw-side,.cgrid,.sheet-b{scrollbar-gutter:stable}
+  .accw-l:focus-visible,.accw-m:focus-visible,.accw-x:focus-visible,.ovw-side:focus-visible{outline-offset:-2px;border-radius:12px}
+  ::-webkit-scrollbar{width:10px;height:10px;background:transparent}
+  ::-webkit-scrollbar-button{display:none;width:0;height:0}
+  ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
+  /* 10px 的軌道，滑塊用透明邊框留出 2px，看起來 6px */
+  ::-webkit-scrollbar-thumb{background-color:transparent;background-clip:padding-box;border:2px solid transparent;border-radius:6px;min-height:32px}
+  .sb-on::-webkit-scrollbar-thumb,.is-scrolling::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--mu) 55%,transparent)}
+  ::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:active{background-color:var(--mu)}
+  @supports not selector(::-webkit-scrollbar){
+    *{scrollbar-width:thin;scrollbar-color:transparent transparent}
+    :hover,:focus-within,.sb-on,.is-scrolling{scrollbar-color:color-mix(in srgb,var(--mu) 55%,transparent) transparent}
+  }
+}
+
+/* ------------------------------------------------------------ 信用卡逐筆對帳（issue #15） */
+.callout:not(.warn):not(.over):not(.ok){background:var(--s2)}
+.callout:not(.warn):not(.over):not(.ok) .ic{color:var(--mu)}
+a.opt{text-decoration:none}
+.src.rcd{display:inline-flex;align-items:center;gap:3px;color:var(--ac);border-color:var(--ac-line)}
+.src.rcd .ic{width:10px;height:10px}
+.stm .cnt,.stm-done .cnt{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:99px;background:var(--s3);color:var(--tx);font:600 12px var(--f-m);vertical-align:middle;margin-left:4px}
+.stm{display:flex;flex-direction:column;gap:16px;max-width:1080px}
+.stm-row{display:flex;align-items:center;gap:12px;min-height:64px;padding:10px 0;border-bottom:1px solid var(--ln);color:var(--tx);text-decoration:none}
+.stm-row:last-child{border-bottom:0}
+.stm-row:hover .stm-m b{color:var(--ac)}
+.stm-ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--s2);border:1px solid var(--ln);flex:none}
+.stm-m{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.stm-m b{font-weight:600}
+.stm-r{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-weight:600}
+.stm-sum .panel-tot .ic{width:14px;height:14px;vertical-align:-2px;margin-right:2px}
+.stm-fin{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--ln)}
+.stm-fin .ic{width:14px;height:14px;vertical-align:-2px;margin-right:4px}
+.stm-fin .btn[aria-disabled=true]{opacity:.5;cursor:not-allowed;box-shadow:none}
+#stm-why:focus{outline:none}
+.sl-list{display:flex;flex-direction:column;gap:10px}
+.sl{background:var(--s1);border:1px solid var(--ln);border-radius:var(--r-l);padding:14px;display:flex;flex-direction:column;gap:10px;scroll-margin-top:calc(var(--sat) + 80px)}
+.sl.todo{border-left:3px solid var(--wa)}
+.sl:focus{outline:none}
+.sl:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.sl-pair{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.sl-arrow{display:none}
+.sl-s,.sl-l{display:flex;flex-direction:column;gap:6px;min-width:0}
+.sl-l{padding-top:8px;border-top:1px dashed var(--ln2)}
+.sl-pair.one .sl-l{padding-top:0;border-top:0}
+.sl-l.none p{font-style:italic}
+.sl-line{display:flex;align-items:center;gap:10px;min-width:0}
+.sl-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sl-t b{font-weight:600;overflow-wrap:anywhere}
+.sl-a{font-weight:600;white-space:nowrap}
+.sl-off{color:var(--wa);font-weight:600}
+.cat-ic.sm{width:32px;height:32px;border-radius:8px}
+.cat-ic.sm .ic{width:16px;height:16px}
+.sl-f{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sl-chip{display:inline-flex;align-items:center;gap:5px;font:600 12px/1 var(--f-m);padding:6px 9px;border-radius:6px;border:1px solid transparent}
+.sl-chip .ic{width:13px;height:13px}
+.sl-chip.ok{color:var(--ac);background:var(--ac-soft)}
+.sl-chip.info{color:var(--tx);background:var(--s2);border-color:var(--ln2)}
+.sl-chip.warn{color:var(--wa);background:var(--wa-soft)}
+.sl-chip.bad{color:var(--dg);background:var(--dg-soft)}
+.sl-chip.mu{color:var(--mu);background:var(--s2)}
+.sl-hint{margin:0}
+.sl-acts{display:flex;gap:8px;flex-wrap:wrap}
+.sl-acts .btn{flex:1 1 auto}
+.stm-done{display:flex;flex-direction:column;gap:10px}
+.stm-done>summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;color:var(--tx)}
+.stm-done>summary::-webkit-details-marker{display:none}
+.stm-done>summary .ic{transition:transform .15s}
+.stm-done[open]>summary .ic{transform:rotate(180deg)}
+.stm-done[open]>summary{margin-bottom:10px}
+.stm-raw{margin:0;padding:12px;background:var(--s2);border:1px solid var(--ln);border-radius:var(--r-m);font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--tx)}
+@media (min-width:720px){
+  .sl-pair{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);align-items:start}
+  .sl-pair.one{grid-template-columns:minmax(0,1fr)}
+  .sl-arrow{display:grid;place-items:center;height:100%;color:var(--mu)}
+  .sl-l{padding-top:0;border-top:0;padding-left:12px;border-left:1px dashed var(--ln2)}
+  .sl-pair.one .sl-l{padding-left:0;border-left:0}
+  .sl-acts .btn{flex:0 0 auto}
 }

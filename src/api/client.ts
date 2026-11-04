@@ -43,6 +43,8 @@ export const ERROR_TEXT: Partial<Record<ClientErrorCode, string>> = {
   NOT_FOUND: "找不到這筆資料",
   AUTH_EXPIRED: "登入已過期",
   FORBIDDEN: "沒有權限",
+  STATEMENT_NOT_BALANCED: "差額不為 0 或還有未處理的項目，不能完成對帳",
+  STATEMENT_FINALIZED: "這一期已經完成對帳",
   DB_BUSY: "伺服器忙碌中，請稍後再試",
   WRITE_SERVICE_UNAVAILABLE: "暫時無法寫入，請稍後再試",
   OFFLINE: "目前離線",

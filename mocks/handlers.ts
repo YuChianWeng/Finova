@@ -7,6 +7,8 @@ import {
   db, acc, cat, mainOf, addRow, addTransfer, balanceAt, delta, live, dt, r2, S,
   MOCK_TODAY, MOCK_NOW, OPENING_AT, type Row, type Acc,
 } from "./db";
+import { stmts, findStmt, stateOf, unmatchedRows, candidatesOf, stmtRef, chargeOf, lineTotal, type SStmt, type SLine } from "./statements";
+import { needsAction } from "../src/lib/statement";
 
 /* ================================================================ utils */
 export type MockResponse = { status: number; body: unknown; headers?: Record<string, string> };
@@ -50,6 +52,7 @@ export function toTx(r: Row, balance_after: number | null = null): L.Transaction
     transfer: cp && r.group_id && r.leg ? { group_id: r.group_id, leg: r.leg, counterpart: { transaction_id: cp.id, account_key: cp.account_key, account_name: accRef(cp.account_key).name, amount: M(cp.amount, cp.currency) }, fee: fee ? M(fee.amount, fee.currency) : null } : null,
     recurring_rule_id: r.recurring_rule_id,
     balance_after: balance_after == null ? null : M(balance_after, r.currency),
+    statement: stmtRef(r.id),
     created_at: r.created_at, updated_at: r.updated_at,
   };
 }
@@ -825,6 +828,80 @@ function exportCsv(q: Record<string, string>): MockResponse {
   return { status: 200, body: "﻿" + [head.join(","), ...lines].join("\n"), headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="finova-transactions.csv"' } };
 }
 
+/* ================================================================ 信用卡逐筆對帳（v1.1 提案，issue #15） */
+function stmtLine(s: SStmt, l: SLine): L.StatementLine {
+  const state = stateOf(s, l);
+  return { line_id: l.line_id, txn_date: l.txn_date, post_date: l.post_date, description: l.description, amount: M(l.amount), kind: l.kind, fx: l.fx, state,
+    match: l.tx != null ? { transaction_id: l.tx, confidence: l.confidence, by: l.by, confirmed: l.confirmed } : null,
+    candidates: state === "ignored" || (state !== "amount_differs" && l.tx != null) ? [] : candidatesOf(s, l),
+    suggested_category_key: l.cat, ignore_reason: l.reason, raw_text: l.raw };
+}
+function stmtSummary(s: SStmt): L.Statement {
+  const lines = s.lines.map((l) => stmtLine(s, l));
+  const due = lineTotal(s), pay = -s.lines.filter((l) => l.kind === "payment").reduce((a, l) => a + l.amount, 0);
+  return { statement_id: s.statement_id, account_key: s.account_key, period_start: s.period_start, period_end: s.period_end, close_date: s.close_date, due_date: s.due_date,
+    total_due: M(due), min_due: M(Math.max(0, Math.round(due * 0.1))), prev_balance: M(s.prev_balance), payments: M(pay), status: s.status,
+    counts: { lines: lines.length, matched: lines.filter((l) => l.state === "matched" || l.state === "added").length, needs_action: lines.filter(needsAction).length },
+    source: { kind: "email", received_at: s.received_at }, reconciled_at: s.reconciled_at };
+}
+function stmtDetail(id: string): L.StatementDetail {
+  const s = needStmt(id);
+  const lines = s.lines.map((l) => stmtLine(s, l));
+  const ids = new Set(lines.flatMap((l) => [...(l.match ? [l.match.transaction_id] : []), ...l.candidates]));
+  const rows = db.rows.filter((r) => ids.has(r.id) && !r.deleted_at);
+  let st = 0, ml = 0;
+  lines.forEach((l, i) => { if (l.state === "ignored") return; st += s.lines[i].amount; const r = l.match ? rows.find((x) => x.id === l.match!.transaction_id) : null; if (r) ml += chargeOf(r); });
+  const um = unmatchedRows(s);
+  const period = live().filter((r) => r.account_key === s.account_key && r.type !== "adjustment" && r.date >= s.period_start && r.date <= s.period_end).reduce((a, r) => a + chargeOf(r), 0);
+  return { statement: stmtSummary(s), lines, unmatched_ledger: um.map((r) => toTx(r)), ledger: rows.map((r) => toTx(r)), diff: M(r2(st - ml)),
+    totals: { statement: M(r2(st)), matched_ledger: M(r2(ml)), ledger_period: M(r2(period)) } };
+}
+function needStmt(id: string): SStmt { const s = findStmt(id); if (!s) throw new HttpError(fail(404, "NOT_FOUND", "找不到這一期帳單")); return s!; }
+function editable(sid: string, lid: string): [SStmt, SLine] {
+  const s = needStmt(sid);
+  if (s.status === "reconciled") throw new HttpError(fail(409, "STATEMENT_FINALIZED", "這一期已經完成對帳，不能再修改"));
+  const l = s.lines.find((x) => x.line_id === lid); if (!l) throw new HttpError(fail(404, "NOT_FOUND", "找不到這一行"));
+  return [s, l!];
+}
+function stmtMatch(sid: string, lid: string, b: { transaction_id?: number }) {
+  const [s, l] = editable(sid, lid);
+  const r = live().find((x) => x.id === Number(b.transaction_id));
+  if (!r || r.account_key !== s.account_key) bad("VALIDATION_ERROR", "只能配對這張卡的帳本記錄", { transaction_id: ["請從候選清單選擇"] });
+  const other = stmts.flatMap((x) => x.lines).find((x) => x !== l && x.tx === r!.id && !x.ignored);
+  if (other) bad("VALIDATION_ERROR", "這筆帳本記錄已經配對到其他行", { transaction_id: ["已配對到其他行"] });
+  Object.assign(l, { tx: r!.id, by: "manual", confidence: r!.date === l.txn_date && chargeOf(r!) === l.amount ? "exact" : "fuzzy", confirmed: true, ignored: false, reason: null, added: false });
+  return stmtDetail(sid);
+}
+function stmtConfirm(sid: string, lid: string) {
+  const [s, l] = editable(sid, lid);
+  const st = stateOf(s, l);
+  if (st !== "matched" && st !== "added") bad("VALIDATION_ERROR", st === "amount_differs" ? "金額不同，請先更新帳本金額或改配對" : "這一行還沒有配對", {});
+  l.confirmed = true;
+  return stmtDetail(sid);
+}
+function stmtIgnore(sid: string, lid: string, b: { reason?: string }) {
+  const [, l] = editable(sid, lid);
+  Object.assign(l, { ignored: true, reason: (b?.reason ?? "").trim().slice(0, 100) || null });
+  return stmtDetail(sid);
+}
+function stmtAdd(sid: string, lid: string, b: L.CreateTransactionRequest) {
+  const [s, l] = editable(sid, lid);
+  if (b.account_key !== s.account_key) bad("VALIDATION_ERROR", "帳戶必須是這張卡", { account_key: ["請選擇這張信用卡"] });
+  // 冪等 key 由 line_id 推導：同一行重送不會重複新增
+  const res = createTx({ ...b, idempotency_key: `stmt:${sid}-${lid}` });
+  if (res.status === "created") Object.assign(l, { tx: res.transaction.id, by: "manual", confidence: "exact", confirmed: true, ignored: false, reason: null, added: true });
+  return { ...res, transaction: toTx(live().find((r) => r.id === res.transaction.id)!), detail: stmtDetail(sid) };
+}
+function stmtFinalize(sid: string) {
+  const s = needStmt(sid);
+  if (s.status === "reconciled") bad("STATEMENT_FINALIZED", "這一期已經完成對帳", {}, 409);
+  const d = stmtDetail(sid);
+  const left = d.lines.filter(needsAction).length;
+  if (left || Number(d.diff.amount) !== 0) bad("STATEMENT_NOT_BALANCED", left ? `還有 ${left} 筆需要處理` : `差額 ${d.diff.amount} 不為 0`, {}, 409);
+  s.status = "reconciled"; s.reconciled_at = nowISO();
+  return stmtDetail(sid);
+}
+
 /* ================================================================ router */
 type H = (p: string[], q: Record<string, string>, b: any) => unknown;
 const routes: [string, RegExp, H][] = [
@@ -852,6 +929,13 @@ const routes: [string, RegExp, H][] = [
   ["GET", /^\/merchants$/, (_, q) => merchantSuggest(q)],
   ["GET", /^\/trash$/, () => trash()],
 
+  ["GET", /^\/statements$/, (_, q) => ({ rows: stmts.filter((x) => !q.account || x.account_key === q.account).sort((a, b) => b.close_date.localeCompare(a.close_date)).map(stmtSummary) })],
+  ["GET", /^\/statements\/([^/]+)$/, ([id]) => stmtDetail(decodeURIComponent(id))],
+  ["POST", /^\/statements\/([^/]+)\/lines\/([^/]+)\/match$/, ([id, l], _, b) => stmtMatch(decodeURIComponent(id), decodeURIComponent(l), b ?? {})],
+  ["POST", /^\/statements\/([^/]+)\/lines\/([^/]+)\/confirm$/, ([id, l]) => stmtConfirm(decodeURIComponent(id), decodeURIComponent(l))],
+  ["POST", /^\/statements\/([^/]+)\/lines\/([^/]+)\/ignore$/, ([id, l], _, b) => stmtIgnore(decodeURIComponent(id), decodeURIComponent(l), b ?? {})],
+  ["POST", /^\/statements\/([^/]+)\/lines\/([^/]+)\/add$/, ([id, l], _, b) => stmtAdd(decodeURIComponent(id), decodeURIComponent(l), b)],
+  ["POST", /^\/statements\/([^/]+)\/finalize$/, ([id]) => stmtFinalize(decodeURIComponent(id))],
   ["POST", /^\/transactions$/, (_, __, b) => createTx(b)],
   ["POST", /^\/transfers$/, (_, __, b) => createTransfer(b)],
   ["PATCH", /^\/transactions\/(\d+)$/, ([id], _, b) => patchTx(+id, b)],

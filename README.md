@@ -113,6 +113,21 @@
 2. App 比對計算出的餘額，告訴你差多少。
 3. 有差額時可以：檢查上次對帳後的交易找漏記、記一筆「餘額調整」（不計入收支），或先保留差額之後再處理。
 
+#### 信用卡逐筆對帳（電子帳單）
+
+<p><img src="docs/screenshots/desktop-statement-dark.webp" width="860" alt="信用卡逐筆對帳"></p>
+
+信用卡可以依電子帳單一筆一筆核對。從信用卡的帳戶詳情、對帳頁的「信用卡對帳單」，或對帳時選了信用卡，都能進入每期帳單清單（結帳日、繳款日、應繳金額、待核對／已核對）。
+
+- 點進一期：上面是帳單合計、帳本已配對的合計和**差額**；下面每一列左邊是帳單上的那一筆，右邊是配對到的帳本記錄。
+- 每一筆都有狀態（文字加圖示）：**已配對**（完全吻合，或日期有出入要確認）、**帳本沒有**、**金額不同**、**疑似重複**、**已忽略**。需要處理的排在前面，處理完的收進「已處理」。
+- 可以做的事：**確認配對**（完全吻合的可以一次全部確認）、**新增到帳本**（打開記一筆表單，帶入日期、金額、名稱和建議分類，帳戶是這張卡，存好後自動配對）、**手動配對**（從候選的帳本記錄選一筆）、**用帳單金額更新帳本**、**忽略**（例如分期的後幾期），以及查看**原始帳單文字**。這些動作都不會自動刪除或覆寫帳本。
+- 「帳單沒有的帳本記錄」另外列出（可能下一期才入帳、記錯帳戶或重複記帳），不計入差額。
+- 每一筆都處理完、差額為 0，才能按「完成對帳」；不能按時會寫出原因。完成後，配對到的帳本記錄在明細上會顯示「已對帳」，之後編輯或刪除會先提醒。
+- 離線時這個畫面只能查看。
+
+帳單的解析（從信箱取得電子帳單）由後端負責，前端只讀取和核對；API 是契約 v1.1 的提案，見 [`docs/CONTRACT-CHANGES.md`](docs/CONTRACT-CHANGES.md) §6。
+
 ### 離線與同步
 
 - 沒有網路時仍然可以記帳，紀錄會標「待同步」，連上網路後自動送出。
@@ -169,6 +184,9 @@ npm run build                                    # 正式版輸出到 dist/（�
 | `src/ui/ptr.ts` | 主畫面 App 的下拉更新 |
 | `src/ui/remind.ts` | 待處理提醒清單（總覽卡片、鈴鐺面板、平板通知中心共用） |
 | `src/lib/layout.ts` | 960px 斷點；跨過斷點時重畫目前頁面 |
+| `src/lib/statement.ts` | 信用卡逐筆對帳的純邏輯：需要處理、差額、能否完成對帳、排序與狀態文字 |
+| `src/views/statements.ts` | 信用卡對帳單清單與逐筆對帳畫面 |
+| `mocks/statements.ts` | 合成的電子帳單（虛構商家、整數金額），涵蓋逐筆對帳的各種狀況 |
 | `src/lib/series.ts` | 平板概覽與帳戶頁的序列計算（每日收支、累積餘額、上期比較、週期期數；十進位運算） |
 | `deploy/` | 掛到 Next.js（`next-finance.mjs`）或 nginx（`nginx-finance.conf`）的設定範例 |
 | `docs/` | 部署說明、契約修訂提案、README 用的 logo 與截圖 |
@@ -188,7 +206,7 @@ npm run build                                    # 正式版輸出到 dist/（�
 | §5 錯誤碼 | `details` 顯示在對應欄位旁；503 自動重試 2 次（同一把 key），仍失敗時顯示重試按鈕 |
 | §6 登入過期 | 表單存到 sessionStorage，顯示「重新登入」，導向 `/cdn-cgi/access/login?redirect_url=…`；回來後自動還原 |
 | §6 離線 | 新增進佇列並標「待同步」；`online`、回到前景或按「同步」時依序送出；4xx 留在佇列等你修正；編輯、刪除、對帳在離線時停用 |
-| §8 路由 | `/finance`、`/transactions`（篩選放在 query，名稱和 API 參數相同）、`/transactions/:id`、`/new?type=`、`/accounts[/:key]`、`/reports/daily…trend`、`/budgets`、`/projects[/:id]`、`/goals[/:id]`、`/reconcile?account=`、`/settings/*` |
+| §8 路由 | `/finance`、`/transactions`（篩選放在 query，名稱和 API 參數相同）、`/transactions/:id`、`/new?type=`、`/accounts[/:key]`、`/reports/daily…trend`、`/budgets`、`/projects[/:id]`、`/goals[/:id]`、`/reconcile?account=`、`/reconcile/statements[?account=｜/:id]`（v1.1 提案）、`/settings/*` |
 
 ## Mock 錯誤模擬
 

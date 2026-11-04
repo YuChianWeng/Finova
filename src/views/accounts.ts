@@ -159,7 +159,8 @@ function renderAccount(d: AccDetail) {
       ${s ? `<div class="huge">${fmt(s.amount.amount, s.amount.currency)}</div><p class="sm mu" style="margin:4px 0 14px">${md(s.period_start)}–${md(s.period_end)} · 已繳 ${fmt(s.paid.amount, s.paid.currency)}</p>` : `<p class="sm mu">尚無帳單資料</p>`}
       <div class="kv" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><span>結帳日<br><b>${cc.statement_day ? `每月 ${cc.statement_day} 日` : "—"}</b></span><span>繳款日<br><b>${s?.due_date ? md(s.due_date) : cc.due_day ? `每月 ${cc.due_day} 日` : "—"}</b></span><span>目前欠款<br><b>${money ? fmt(neg(money.amount), money.currency) : "—"}</b></span><span>額度<br><b>${cc.credit_limit ? fmt(cc.credit_limit.amount, cc.credit_limit.currency) : "—"}</b></span></div>
       ${cc.utilization != null ? `<div style="margin-top:14px">${pbar(cc.utilization, cc.utilization >= 0.8 ? "warn" : "ok")}<div class="between xs mu num" style="margin-top:6px"><span>額度使用率 ${pct1(cc.utilization)}</span></div></div>` : ""}
-      ${s && !s.is_paid_off ? `<button class="btn p wide" style="margin-top:14px" data-a="pay" data-id="${esc(a.account_key)}" data-amt="${sub(s.amount.amount, s.paid.amount)}">${ic("swap")}繳卡費（轉帳到這張卡）</button>` : ""}</div>`;
+      ${s && !s.is_paid_off ? `<button class="btn p wide" style="margin-top:14px" data-a="pay" data-id="${esc(a.account_key)}" data-amt="${sub(s.amount.amount, s.paid.amount)}">${ic("swap")}繳卡費（轉帳到這張卡）</button>` : ""}
+      <a class="btn wide" style="margin-top:10px" href="${href("/reconcile/statements?account=" + encodeURIComponent(a.account_key))}">${ic("receipt")}對帳單（逐筆核對）</a></div>`;
   } else {
     side = `<div class="card sp-4"><div class="ch"><h2 class="h2">本期 · ${+d.a.period.from.slice(5, 7)} 月</h2></div><div class="panel-tot" style="grid-template-columns:1fr 1fr"><div><span class="eyebrow">流入</span><span class="amt inc">+${fmt(a.period.inflow.amount, a.period.inflow.currency)}</span></div><div><span class="eyebrow">流出</span><span class="amt">${MINUS}${fmt(a.period.outflow.amount, a.period.outflow.currency)}</span></div></div>
       <p class="eyebrow" style="margin:16px 0 8px">支出前幾名</p>${a.top_categories.length ? a.top_categories.map((c) => `<a class="between sm" href="${href(`/transactions?accounts=${encodeURIComponent(a.account_key)}&categories=${c.category_key}`)}" style="min-height:36px;border-bottom:1px solid var(--ln);text-decoration:none;color:var(--tx)"><span class="row"><span style="color:${catColor(c.category_key, c.icon)}">${ic(catIconName(c.category_key, c.icon), "s")}</span>${esc(c.name)}</span><span class="num">${fmt(c.amount)}</span></a>`).join("") : '<p class="sm mu">本月沒有支出</p>'}</div>`;
@@ -285,6 +286,7 @@ function detailHTML(d: Det | null) {
   const rec = a.reconcile.last_at ? `上次對帳 ${slash(a.reconcile.last_at.slice(0, 10))}（${daysBetween(a.reconcile.last_at.slice(0, 10), today())} 天前）` : "還沒有對帳過";
   const ops = `<section class="accw-card"><div class="ch"><h3 class="h3">帳戶操作</h3></div><div class="mlist">
     <a href="${href("/reconcile?account=" + encodeURIComponent(a.account_key))}">${ic("scale", "s")}對帳<span class="xs mu" style="margin-left:auto">${rec}</span>${ic("chev-r", "chev")}</a>
+    ${cc ? `<a href="${href("/reconcile/statements?account=" + encodeURIComponent(a.account_key))}">${ic("receipt", "s")}對帳單（逐筆核對）${ic("chev-r", "chev")}</a>` : ""}
     <a href="${href("/settings/accounts/opening")}">期初餘額與日期<span class="xs mu" style="margin-left:auto">${a.balance.opening_set ? "已設定" : "未設定"}</span>${ic("chev-r", "chev")}</a>
     <button data-a="acc-archive" data-id="${esc(a.account_key)}" data-v="${a.is_archived ? "0" : "1"}">${a.is_archived ? "取消封存" : "封存帳戶"}${ic("chev-r", "chev")}</button>
     <button data-a="acc-del" data-id="${esc(a.account_key)}" style="color:var(--dg)">刪除帳戶…${ic("chev-r", "chev")}</button></div></section>`;
@@ -325,11 +327,11 @@ function recordsHTML(d: Det | null) {
 function renderWideAcc(d: AW) {
   const k = d.det?.key ?? null, n = d.det?.rows.length ?? 0;
   return `<div class="accw pane-${ui.accW.pane}">
-    <section class="accw-l" aria-label="帳戶清單">${masterHTML(d.acc, k)}</section>
+    <section class="accw-l" aria-label="帳戶清單" tabindex="0">${masterHTML(d.acc, k)}</section>
     <div class="accw-r">
       <div class="accw-tabs seg" role="tablist" aria-label="帳戶內容"><button role="tab" data-a="accw-pane" data-v="info" aria-selected="${ui.accW.pane === "info"}">帳戶資訊</button><button role="tab" data-a="accw-pane" data-v="rec" aria-selected="${ui.accW.pane === "rec"}">一般記錄 (${n})</button></div>
-      <section class="accw-m" id="accw-m" aria-label="帳戶詳情">${detailHTML(d.det)}</section>
-      <section class="accw-x" id="accw-x" aria-label="一般記錄">${recordsHTML(d.det)}</section>
+      <section class="accw-m" id="accw-m" aria-label="帳戶詳情" tabindex="0">${detailHTML(d.det)}</section>
+      <section class="accw-x" id="accw-x" aria-label="一般記錄" tabindex="0">${recordsHTML(d.det)}</section>
     </div></div>`;
 }
 /** 只更新中欄、右欄（不整頁重畫；左欄的捲動位置和展開狀態都保留） */

@@ -76,7 +76,7 @@ export function txRow(t: L.Transaction, o: RowOpt = {}): string {
         <span class="cat-ic" style="--cc:${col}">${ic(icn)}</span>
         <span class="tx-m">
           <span class="tx-t"><span>${title}</span>${tags}</span>
-          <span class="tx-s"><span>${sub}</span><span aria-hidden="true">·</span><span class="num">${when}</span>${pending ? `<span class="st warn">${ic("clock", "s")}待同步</span>` : `<span class="src">${SOURCE_TEXT[t.source]}</span>`}</span>
+          <span class="tx-s"><span>${sub}</span><span aria-hidden="true">·</span><span class="num">${when}</span>${pending ? `<span class="st warn">${ic("clock", "s")}待同步</span>` : `<span class="src">${SOURCE_TEXT[t.source]}</span>`}${t.statement?.reconciled ? `<span class="src rcd" title="已在 ${md(t.statement.close_date)} 帳單完成對帳">${ic("check", "s")}已對帳</span>` : ""}</span>
         </span>
         <span class="tx-r">${amtHTML(t)}${o.balance && t.balance_after ? `<span class="num xs mu">餘 ${fmt(t.balance_after.amount, t.balance_after.currency)}</span>` : ""}<span class="pill">${esc(pill)}</span></span>
       </button>

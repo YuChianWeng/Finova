@@ -7,7 +7,7 @@ import { app, ui, accOpt } from "../state";
 import { api } from "../api/ledger";
 import { LedgerError } from "../api/client";
 import { registerView, actions, rerender, reload, handleError, currentData } from "../app";
-import { navigate, type Route } from "../router";
+import { navigate, href, type Route } from "../router";
 import { txRow } from "../ui/components";
 import { toast } from "../ui/overlay";
 import { balanceHTML } from "./accounts";
@@ -36,6 +36,7 @@ function render(d: D) {
     body = `<div class="stack" style="gap:16px"><div class="callout ok">${ic(a.icon ?? "wallet")}<div><b>${esc(a.name)}</b><br><span class="sm">App 計算${liab ? "欠款" : "餘額"} ${balanceHTML(a)}</span></div></div>
       <div class="fld"><label class="eyebrow" for="rec-actual">${liab ? "銀行或 App 上看到的目前欠款（正數）" : "銀行或 App 上看到的實際餘額"}</label><div class="amt-box ${R.err ? "bad" : ""}"><span class="cur">${esc(curInfo(a.currency).symbol)}</span><input id="rec-actual" class="amt-in" inputmode="decimal" placeholder="0" value="${esc(R.actual)}" autocomplete="off" ${R.err ? 'aria-invalid="true" aria-describedby="rec-err"' : ""}></div>${R.err ? `<p class="err" id="rec-err">${ic("alert", "s")}${esc(R.err)}</p>` : ""}</div>
       <div class="fld"><label class="eyebrow" for="rec-date">餘額日期</label><input id="rec-date" class="in" type="date" value="${R.date}" max="${today()}"></div>
+      ${a.group === "credit_card" ? `<a class="opt" href="${href("/reconcile/statements?account=" + encodeURIComponent(a.account_key))}">${ic("receipt")}<span><b>逐筆對帳（依電子帳單）</b><span class="sm mu">差額不是 0 時，用帳單上的每一筆找出漏記、重複或金額不同</span></span></a>` : ""}
       <div class="row"><button class="btn" data-a="rec-back">${ic("chev-l", "s")}上一步</button><button class="btn p" style="flex:1" data-a="rec-next" ${app.online ? "" : "disabled"}>核對</button></div>${app.online ? "" : '<p class="xs mu" style="margin:0">離線中不能對帳。</p>'}</div>`;
   } else {
     const p = R.preview!, res = R.result, liab = LIAB.includes(a.group);
@@ -46,6 +47,7 @@ function render(d: D) {
       : !diff ? `<div class="empty"><div class="cat-ic" style="width:64px;height:64px;color:var(--ac)">${ic("check")}</div><h3>餘額相符</h3><p>按「確認」記錄這次對帳。</p><button class="btn p" data-a="rec-commit" data-v="matched">確認</button></div>`
       : `<div class="callout warn" style="margin-top:16px">${ic("alert")}<div>App 比實際${(diff > 0) !== liab ? "少" : "多"}了 <b class="num">${fmt(abs(p.diff.amount), p.diff.currency)}</b>。可能有漏記或重複記錄。</div></div>
         <div class="stack" style="margin-top:12px">
+          ${a.group === "credit_card" ? `<a class="opt" href="${href("/reconcile/statements?account=" + encodeURIComponent(a.account_key))}">${ic("receipt")}<span><b>逐筆對帳（依電子帳單）</b><span class="sm mu">用帳單上的每一筆核對，找出是哪幾筆對不上</span></span></a>` : ""}
           <button class="opt" data-a="rec-check">${ic("search")}<span><b>(a) 檢查期間交易</b><span class="sm mu">列出上次對帳之後的 ${p.transactions_since_last.length} 筆交易，找出漏記</span></span></button>
           <button class="opt" data-a="rec-commit" data-v="adjusted">${ic("scale")}<span><b>(b) 記一筆調整</b><span class="sm mu">自動補 ${fmtSigned(p.diff.amount, p.diff.currency)}，標示為「餘額調整」，不計入收支報表</span></span></button>
           <button class="opt" data-a="rec-commit" data-v="left_open">${ic("clock")}<span><b>(c) 先保留差額</b><span class="sm mu">只記錄這次對帳結果，之後再處理</span></span></button>
@@ -54,7 +56,7 @@ function render(d: D) {
         <button class="btn g" style="margin-top:12px" data-a="rec-back">${ic("chev-l", "s")}重新輸入</button>`);
   }
   const hist = `<div class="card sp-4"><div class="ch"><h2 class="h2">對帳紀錄</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>日期</th><th>帳戶</th><th class="r">差額</th></tr></thead><tbody>${d.recs.slice(0, 20).map((x) => `<tr><td class="num">${slash(x.as_of.slice(0, 10))}</td><td>${esc(accOpt(x.account_key)?.name ?? x.account_key)}</td><td class="r num" style="${sign(x.diff.amount) ? "color:var(--wa)" : ""}">${sign(x.diff.amount) ? fmtSigned(x.diff.amount, x.diff.currency) + (x.resolution === "adjusted" ? " · 已調整" : x.resolution === "left_open" ? " · 保留" : "") : ic("check", "s")}</td></tr>`).join("")}</tbody></table></div></div>`;
-  return `<div class="grid"><div class="card sp-8"><div class="ch"><h2 class="h2">${ic("scale")}對帳</h2>${R.step > 1 ? `<button class="btn sm g" data-a="rec-reset">重新開始</button>` : ""}</div>${steps}<div style="margin-top:18px">${body}</div></div>${hist}</div>`;
+  return `<div class="grid"><div class="card sp-8"><div class="ch"><h2 class="h2">${ic("scale")}對帳</h2><span class="row">${R.step > 1 ? `<button class="btn sm g" data-a="rec-reset">重新開始</button>` : ""}<a class="btn sm" href="${href("/reconcile/statements")}">${ic("receipt", "s")}信用卡對帳單</a></span></div>${steps}<div style="margin-top:18px">${body}</div></div>${hist}</div>`;
 }
 registerView("reconcile", { load, render, title: () => "對帳", back: "/more", nav: "/reconcile" });
 
