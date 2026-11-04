@@ -107,6 +107,9 @@
 
 用 Safari 開啟 `/finance`，按「分享 › 加入主畫面」，就會出現 Finova 圖示，開啟後直接進入帳戶總覽，像一般 App 一樣全螢幕使用。
 
+- 主畫面 App 沒有瀏覽器的重新整理按鈕：在帳戶總覽、每日明細、全部交易頁 **往下拉** 就能更新。
+- 主畫面 App 和 Safari 不共用登入狀態，第一次從圖示開啟時要再登入一次。
+
 ---
 
 # 開發者說明
@@ -129,7 +132,9 @@ VITE_API_TARGET=https://你的網站 npm run dev:api   # 不載入 mock，/api �
 npm run build                                    # 正式版輸出到 dist/（不含 mock）
 ```
 
-部署時，伺服器要把 `/finance/*` 都回 `dist/index.html`（前端用 history 路由）。`dist/sw.js` 必須放在 `/finance/` 底下。
+部署到財富儀表板的 `/finance`（路由衝突、SPA fallback、service worker scope、快取標頭、Cloudflare Access、上線與回滾）請看 **[docs/DEPLOY.md](docs/DEPLOY.md)**。後端 `/api/ledger/*` 上線前不要切換正式的 `/finance`。
+
+和 FRONTEND-CONTRACT v1.0 刻意不同的地方（App 首頁改成帳戶總覽、`start_url`）記在 [docs/CONTRACT-CHANGES.md](docs/CONTRACT-CHANGES.md)，待併入契約 v1.1。
 
 ## 目錄
 
@@ -145,7 +150,9 @@ npm run build                                    # 正式版輸出到 dist/（�
 | `src/ui/entry.ts` | ＋ 記一筆／編輯表單 |
 | `public/sw.js` | Service worker：離線時讀快取（catalog、overview、最近一頁明細） |
 | `public/logo-*.png`、`apple-touch-icon.png`、`icon-maskable-*.png` | App 圖示（一般／iOS／Android 自適應） |
-| `docs/` | README 用的 logo 與截圖 |
+| `src/ui/ptr.ts` | 主畫面 App 的下拉更新 |
+| `deploy/` | 掛到 Next.js（`next-finance.mjs`）或 nginx（`nginx-finance.conf`）的設定範例 |
+| `docs/` | 部署說明、契約修訂提案、README 用的 logo 與截圖 |
 | `mocks/fixtures/*.json` | DESIGN-BRIEF §8 的假資料，加上契約 §7 要求的情境 |
 | `mocks/db.ts`、`mocks/handlers.ts` | 記憶體資料庫、各端點實作 |
 | `mocks/browser.ts` | 在瀏覽器攔截 `fetch('/api/ledger/*')`、模擬錯誤 |
@@ -154,7 +161,7 @@ npm run build                                    # 正式版輸出到 dist/（�
 
 | 契約 | 前端做法 |
 |---|---|
-| §1.2 金額是字串 | 顯示一律由 `lib/money` 格式化；加總用 BigInt；多幣別分開列出 |
+| §1.2 金額是字串 | 顯示一律由 `lib/money` 格式化；加總、相減、平均都用 BigInt 十進位（`add`、`sub`、`sumByCurrency`、`div`）；多幣別分開列出；`num()` 轉成浮點數只用在圖表比例 |
 | §1.5 冪等 | 開表單時產生 `web:<uuid>`，重送與離線佇列沿用同一把；`duplicate` 視同成功；`IDEMPOTENCY_CONFLICT` 會先問你，再決定是否當成新的一筆 |
 | §1.6 樂觀鎖 | PATCH／DELETE 帶 `expected_version`；`VERSION_CONFLICT` 時顯示 `error.current` 的最新內容並提供「重新載入」 |
 | §2.1 catalog | 啟動時載入、快取 5 分鐘；遇到 `UNKNOWN_*` 錯誤時強制重新載入。分類、帳戶、標籤、常用項目都來自 catalog，前端沒有寫死 |

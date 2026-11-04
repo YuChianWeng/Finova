@@ -1,7 +1,7 @@
 /** 第二頁：每日明細＋本月總覽（/finance）。資料來自 /overview 與該月的 /transactions。 */
 import type * as L from "../types/ledger";
 import { esc, ic } from "../lib/dom";
-import { fmt, fmtSigned, MINUS, num, pct1, twd, byCurrency, sign, sub } from "../lib/money";
+import { fmt, fmtSigned, MINUS, num, pct1, twd, byCurrency, sign, sub, cmp, sumByCurrency } from "../lib/money";
 import { today, addDays, daysBetween, dow, wd, md, slash, monthOf, addMonths, daysInMonth, monthStart, monthEnd } from "../lib/dates";
 import { app, ui } from "../state";
 import { api } from "../api/ledger";
@@ -49,10 +49,9 @@ function calendar(all: L.Transaction[]) {
   return `<div class="cal" role="group" aria-label="${c.month.replace("-", " 年 ")} 月">${head}${cells}</div><button class="cal-handle" data-a="cal-col" aria-label="${c.col ? "展開整個月" : "收合成一週"}"></button>`;
 }
 function dayMoney(list: L.Transaction[], type: "expense" | "income") {
-  const by: Record<string, number> = {};
-  list.filter((x) => x.type === type).forEach((x) => (by[x.amount.currency] = (by[x.amount.currency] ?? 0) + num(x.amount.amount)));
-  if (!Object.keys(by).length) by.TWD = 0;
-  return byCurrency(Object.fromEntries(Object.entries(by).map(([k, v]) => [k, String(v)])));
+  const by = sumByCurrency(list.filter((x) => x.type === type).map((x) => x.amount));
+  if (!Object.keys(by).length) by.TWD = "0";
+  return byCurrency(by);
 }
 function alertItem(a: L.Alert): { ic: string; t: string; s: string; btn: string; ac?: boolean } {
   switch (a.type) {
@@ -123,7 +122,7 @@ function render(d: D) {
     budCard = `<div class="card"><div class="ch"><h2 class="h2">本月預算</h2><a class="link" href="${href("/budgets")}">全部分類 ${ic("chev-r", "s")}</a></div>
       <div class="between" style="align-items:flex-end;flex-wrap:wrap"><div><p class="eyebrow">剩餘</p><div class="huge">${fmt(T.remaining)}</div></div><div class="num sm mu" style="text-align:right">已用 ${fmt(T.used)} / ${fmt(T.limit)}<br>${pct1(T.ratio)}${left ? ` · 剩 ${left} 天` : ""}</div></div>
       <div style="margin:12px 0">${pbar(T.ratio, fromBudget(T.status))}</div>
-      ${num(T.projected) > num(T.limit) ? `<p class="xs" style="margin:0 0 10px;color:var(--wa)">照目前速度，月底預估 ${fmt(T.projected)}，會超出 ${fmt(sub(T.projected, T.limit))}</p>` : ""}
+      ${cmp(T.projected, T.limit) > 0 ? `<p class="xs" style="margin:0 0 10px;color:var(--wa)">照目前速度，月底預估 ${fmt(T.projected)}，會超出 ${fmt(sub(T.projected, T.limit))}</p>` : ""}
       <div class="stack" style="gap:10px">${warn.length ? warn.map((l) => `<a href="${href("/budgets")}" class="between" style="text-decoration:none;color:var(--tx);min-height:44px"><span class="row" style="flex:1;min-width:0"><span class="cat-ic" style="width:32px;height:32px;--cc:${catColor(l.category_key)}">${ic(catIconName(l.category_key), "s")}</span><span style="flex:1;min-width:0"><span class="between"><b style="font-weight:500">${esc(l.name)}</b><span class="num xs">${fmt(l.used)} / ${fmt(l.limit)}</span></span>${pbar(l.ratio, fromBudget(l.status), true)}</span></span>${stPill(fromBudget(l.status))}</a>`).join("") : `<p class="xs mu" style="margin:0">${ic("check", "s")} 各分類都在預算內</p>`}</div></div>`;
   }
   const remCard = remindCard(o.alerts);
@@ -140,7 +139,7 @@ function render(d: D) {
     const until = daysBetween(t, p.start_date);
     return `<a class="card tap sp-4" href="${href("/projects/" + p.project_id)}" style="text-decoration:none;color:var(--tx)"><div class="ch"><h2 class="h2">${ic("plane")}${p.status === "active" ? "進行中的專案" : "即將開始的專案"}</h2><span class="st neu">${p.status === "active" ? `剩 ${p.days_left} 天` : `${until} 天後出發`}</span></div>
       <b style="font-size:16px">${esc(p.name)}</b><p class="sm mu num" style="margin:2px 0 12px">${md(p.start_date)}–${md(p.end_date)} · ${p.days_total} 天</p>
-      ${lim ? `<div class="between num sm" style="margin-bottom:6px"><span>已花 <b>${fmt(String(spent))}</b></span><span class="mu">預算 ${fmt(String(lim))}</span></div>${pbar(spent / lim)}` : ""}
+      ${lim ? `<div class="between num sm" style="margin-bottom:6px"><span>已花 <b>${fmt(p.spent.TWD ?? "0")}</b></span><span class="mu">預算 ${fmt(bt?.total ?? "0")}</span></div>${pbar(spent / lim)}` : ""}
       <p class="xs mu" style="margin:8px 0 0">${p.note ? esc(p.note) + " · " : ""}剩 ${fmt(p.remaining.TWD ?? "0")}${otherB ? ` · 另有 ${otherB}（不混加）` : ""}</p></a>`;
   })() : "";
   const goalsCard = o.goals.length ? `<div class="card sp-4"><div class="ch"><h2 class="h2">${ic("target")}存錢目標</h2><a class="link" href="${href("/goals")}">全部 ${ic("chev-r", "s")}</a></div><div class="stack" style="gap:16px">${o.goals.map((g) => `<a class="card tap" style="padding:0;border:0;background:none;text-decoration:none;color:var(--tx)" href="${href("/goals/" + g.goal_id)}"><div class="between"><b style="font-weight:500">${esc(g.name)}</b>${g.is_behind ? '<span class="st warn">! 進度落後</span>' : `<span class="st ok">${ic("check", "s")}如期</span>`}</div><div class="between num xs mu" style="margin:4px 0 6px"><span>${fmt(g.current, g.currency)} / ${fmt(g.target, g.currency)}</span><span>${pct1(g.progress)}</span></div>${pbar(g.progress, g.is_behind ? "warn" : "ok", true)}<p class="xs mu" style="margin:6px 0 0">${g.deadline ? `期限 ${slash(g.deadline.slice(0, 7))} · ` : ""}預計達成 <span class="num">${g.projected_date ? slash(g.projected_date.slice(0, 7)) : "—"}</span></p></a>`).join("")}</div></div>` : "";

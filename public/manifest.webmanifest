@@ -1,7 +1,7 @@
 {
   "name": "Finova 記帳",
   "short_name": "記帳",
-  "start_url": "/finance/accounts",
+  "start_url": "/finance/accounts?source=pwa",
   "scope": "/finance/",
   "display": "standalone",
   "background_color": "#001A44",

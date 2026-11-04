@@ -100,3 +100,19 @@ export function byCurrency(m: MoneyByCurrency | null | undefined): Money[] {
     .map(([currency, amount]) => ({ currency, amount }));
 }
 export const twd = (m: MoneyByCurrency | null | undefined) => m?.TWD ?? "0";
+
+/** 依幣別加總（十進位），回傳 { TWD: "123.5", USDT: "111.13" }。不同幣別絕不相加。 */
+export function sumByCurrency(list: Money[]): Record<string, string> {
+  const o: Record<string, bigint> = {};
+  list.forEach((m) => (o[m.currency] = (o[m.currency] ?? 0n) + toUnits(m.amount)));
+  return Object.fromEntries(Object.entries(o).map(([c, u]) => [c, fromUnits(u)]));
+}
+/** 金額除以整數（例如平均），結果四捨五入到小數 decimals 位。 */
+export function div(a: string, n: number, decimals = SCALE): string {
+  if (!n) return "0";
+  const u = toUnits(a), d = BigInt(n);
+  const q = (u * 2n + (u < 0n ? -d : d)) / (2n * d); // 四捨五入到最小單位
+  return fromUnits(q, decimals);
+}
+/** a × m ÷ n（例如週預算＝月預算 × 7 ÷ 30），四捨五入到小數 decimals 位。 */
+export const mulDiv = (a: string, m: number, n: number, decimals = SCALE) => div(fromUnits(toUnits(a) * BigInt(m)), n, decimals);
