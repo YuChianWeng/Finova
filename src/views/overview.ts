@@ -144,7 +144,7 @@ function render(d: D) {
 registerView("overview", {
   load, render, nav: "",
   title: () => "每日明細",
-  header: () => `<div class="grow ctr"><button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><h1 class="ttl num">${slash(ui.cal.sel)}</h1><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button></div><button class="ibtn round" data-a="cal-today" aria-label="回到今天">${ic("cal")}</button><button class="ibtn round" data-a="search" aria-label="搜尋交易">${ic("search")}</button>`,
+  header: () => `<div class="grow ctr"><button class="ibtn bare" data-a="cal-prev" aria-label="上個月">${ic("chev-l", "s")}</button><h1 class="ttl num">${slash(ui.cal.sel)}</h1><button class="ibtn bare" data-a="cal-next" aria-label="下個月">${ic("chev-r", "s")}</button>${ui.cal.sel !== today() ? `<button class="chip today-chip" data-a="cal-today" aria-label="回到今天（${slash(today())}）">今天</button>` : ""}</div><button class="ibtn round" data-a="search" aria-label="搜尋交易">${ic("search")}</button>`,
 });
 
 function calMove(k: number) {
@@ -155,6 +155,7 @@ function calMove(k: number) {
 actions({
   "cal-pick"(el) { const d = el.dataset.d!; ui.cal.sel = d; if (monthOf(d) !== ui.cal.month) { ui.cal.month = monthOf(d); reload(); } else rerender(); },
   "cal-prev"() { calMove(-1); }, "cal-next"() { calMove(1); },
+  // 標題列的「今天」chip：只在選到的日期不是今天時出現（issue #9）
   "cal-today"() { const m = monthOf(today()); ui.cal.sel = today(); if (ui.cal.month !== m) { ui.cal.month = m; reload(); } else rerender(); },
   "cal-col"() { ui.cal.col = !ui.cal.col; rerender(); },
   search() { navigate("/transactions"); setTimeout(() => (document.getElementById("q") as HTMLInputElement | null)?.focus(), 400); },

@@ -578,3 +578,6 @@ html.standalone body::before{background:var(--sb)}
   .sheet.pop .sheet-h{padding:14px 18px 12px}
   .sheet.pop .sheet-b{padding:8px 18px 14px}
 }
+
+/* 每日明細標題列：選到的日期不是今天時，日期旁的「今天」chip（issue #9） */
+.today-chip{min-height:30px;padding:0 10px;font-size:12px;margin:0 6px 0 2px;flex:none;border-color:var(--ac-line);color:var(--ac)}
